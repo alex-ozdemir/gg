@@ -81,6 +81,11 @@ void ExecutionGraph::_emplace_thunk( ComputationId id,
       ComputationId child_id = add_thunk( child_hash );
       _create_dependency( id, child_hash, child_id );
     }
+    for ( const Thunk::DataItem & item : computation.thunk.futures() ) {
+      const string child_hash = gg::hash::base( item.first );
+      ComputationId child_id = add_thunk( child_hash );
+      _create_dependency( id, child_hash, child_id );
+    }
   }
 
   // Update our thunk
@@ -297,12 +302,13 @@ ExecutionGraph::order_one_dependencies( const ComputationId id ) const
 
   if ( computation.is_value() ) {
     return {};
-  } else if ( computation.is_thunk() and computation.thunk.can_be_executed() ) {
-    ThunkWriter::write( computation.thunk );
-    return { computation.thunk.hash() };
   } else {
     // TODO replace this O(paths to leaves) alg with an O(nodes) alg.
     std::unordered_set<Hash> result;
+    if ( computation.is_thunk() and computation.thunk.can_be_executed() ) {
+      ThunkWriter::write( computation.thunk );
+      result.insert( computation.thunk.hash() );
+    }
     for ( const ComputationId child_id : computation.deps ) {
       auto subresult = order_one_dependencies( child_id );
       result.insert( subresult.begin(), subresult.end() );

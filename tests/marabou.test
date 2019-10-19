@@ -1,0 +1,10 @@
+#!/bin/bash -xe
+
+cd ${TEST_TMPDIR}
+
+export PATH=${abs_builddir}/../src/models:${abs_builddir}/../src/frontend:$PATH
+
+${abs_srcdir}/../examples/marabou/make-test.sh ${abs_builddir}/../examples/marabou/sleep ${abs_builddir}/../examples/marabou/merge
+GG_FORCE_NO_STATUS=1 gg-force out
+# Check output
+diff out <(echo 'SLEEP(1)')
