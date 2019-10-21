@@ -8,6 +8,7 @@ Makefile.in
 *.log
 *.trs
 .dirstamp
+.*.swp
 
 /INSTALL
 /aclocal.m4

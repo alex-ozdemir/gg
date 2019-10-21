@@ -1,1 +1,1 @@
-SUBDIRS = fibonacci gtest viddec marabou
+SUBDIRS = fibonacci gtest viddec marabou dynamic-value

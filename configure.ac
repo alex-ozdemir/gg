@@ -88,6 +88,7 @@ AC_CONFIG_FILES([Makefile
                  src/remote/Makefile
                  examples/Makefile
                  examples/fibonacci/Makefile
+                 examples/dynamic-value/Makefile
                  examples/gtest/Makefile
                  examples/viddec/Makefile
                  examples/marabou/Makefile
