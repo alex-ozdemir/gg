@@ -218,6 +218,7 @@ int Thunk::execute() const
   // preparing envp
   envars.insert( envars.end(), {
     "__GG_THUNK_PATH__=" + thunk_path.string(),
+    "__GG_THUNK_HASH__=" + hash(),
     "__GG_DIR__=" + gg::paths::blobs().string(),
     "__GG_ENABLED__=1",
   } );
