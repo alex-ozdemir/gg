@@ -125,7 +125,7 @@ vector<string> execute_thunk( const Thunk & original_thunk )
     roost::path outfile { exec_dir_path / output };
 
     if ( not roost::exists( outfile ) ) {
-      throw ExecutionError {};
+      throw ExecutionError {string("Missing output file: ") + output};
     }
 
     /* let's check if the output is a thunk or not */
