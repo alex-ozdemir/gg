@@ -134,7 +134,7 @@ bool AWSLambdaExecutionEngine::can_execute( const gg::thunk::Thunk & thunk ) con
 float AWSLambdaExecutionEngine::compute_cost( const chrono::steady_clock::time_point & begin,
                                               const chrono::steady_clock::time_point & end )
 {
-  const static float unit_cost = 2.501e-6;
+  const static float unit_cost = 4.897e-6;
 
   chrono::duration<float, std::milli> total_ms = end - begin;
   float total = ceil( total_ms.count() / 100 );
