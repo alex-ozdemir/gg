@@ -34,7 +34,7 @@ ComputationId ExecutionGraph::add_thunk( const Hash & full_hash )
   }
 
   // Get thunk
-  Thunk thunk { move( ThunkReader::read( gg::paths::blob( hash ), hash ) ) };
+  Thunk thunk { ThunkReader::read( gg::paths::blob( hash ), hash ) };
 
   // Add blob dependencies
   for ( const Thunk::DataItem & item : thunk.values() ) {
@@ -257,7 +257,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
 
   if ( new_type == gg::ObjectType::Thunk ) {
     // A new thunk -- return leaf dependencies
-    Thunk thunk { move( ThunkReader::read( gg::paths::blob( new_hash ), new_hash ) ) };
+    Thunk thunk { ThunkReader::read( gg::paths::blob( new_hash ), new_hash ) };
     // TODO check that value & executable deps are present
     _emplace_thunk( id, move( thunk ) );
     return order_one_dependencies( id );
