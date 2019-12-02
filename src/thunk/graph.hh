@@ -57,8 +57,8 @@ private:
   // Computations, maybe irreducible, maybe not
   std::unordered_map<ComputationId, Computation> computations_ {};
 
-  // Number of computations that must be reduced
-  size_t n_unreduced {0};
+  // Number of computations that are now values
+  size_t n_values {0};
 
   // The ComputationId for known hashes
   std::unordered_map<Hash, ComputationId> ids_ {};
@@ -131,7 +131,7 @@ public:
   const std::unordered_set<Hash> &
   blob_dependencies() const { return blob_dependencies_; }
 
-  size_t size() const { return n_unreduced; }
+  size_t size() const { return computations_.size() - n_values; }
 };
 
 #endif /* GRAPH_HH */

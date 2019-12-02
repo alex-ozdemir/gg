@@ -58,7 +58,6 @@ void ExecutionGraph::_emplace_thunk( ComputationId id,
     Computation & computation = computations_.at( id );
     computation.thunk = move( thunk );
   } else {
-    n_unreduced++;
     computations_.emplace( id, Computation { move( thunk ) } );
   }
 
@@ -115,7 +114,7 @@ void ExecutionGraph::_update( const ComputationId id )
     if ( child.is_value() ) {
       computation.is_link_ = false;
       computation.outputs = child.outputs;
-      n_unreduced--;
+      n_values++;
       _erase_dependency( id, child_id );
     }
   // Or it could be an (out of date) thunk
@@ -264,7 +263,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
   } else {
     // A value -- return reverse dependencies
     computation.outputs = move( outputs );
-    n_unreduced--;
+    n_values++;
     std::unordered_set<Hash> next_to_execute;
     unordered_set<ComputationId> maybe_ready = _one_thunk_ancestors( id );
     for ( const ComputationId parent_id : maybe_ready ) {
