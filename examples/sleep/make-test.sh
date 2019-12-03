@@ -12,7 +12,7 @@ gg init
 gg collect $SLEEP_PATH
 gg collect $MERGE_PATH
 
-HASHES=$(for i in 1 10 30 60
+HASHES=$(for i in 5 10 30 60
 do
   gg create-thunk --executable $(gg hash $SLEEP_PATH)=sleep --output output \
                   $(gg hash $SLEEP_PATH) sleep ${i} "SLEEP(${i})" 2>&1

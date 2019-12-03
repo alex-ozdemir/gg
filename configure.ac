@@ -91,7 +91,7 @@ AC_CONFIG_FILES([Makefile
                  examples/dynamic-value/Makefile
                  examples/gtest/Makefile
                  examples/viddec/Makefile
-                 examples/marabou/Makefile
+                 examples/sleep/Makefile
                  tests/Makefile])
 
 AC_OUTPUT
