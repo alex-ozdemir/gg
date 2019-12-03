@@ -40,3 +40,4 @@ cmake-build-debug
 ._.DS_Store
 *.py[cod]
 __pycache__/
+compile_commands.json
