@@ -96,6 +96,9 @@ private:
   // Cut the dependencies from `computation`
   void _cut_dependencies( const ComputationId id );
 
+  // Removes this node if it has no dependents. Recursive.
+  void _remove_if_unneeded( const ComputationId id );
+
   // Get a list of executable thunks
   std::unordered_set<Hash>
   order_one_dependencies( const ComputationId id ) const;

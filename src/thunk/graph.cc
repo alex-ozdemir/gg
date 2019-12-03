@@ -178,6 +178,22 @@ void ExecutionGraph::_cut_dependencies( const ComputationId id )
   computation.dep_hashes.clear();
 }
 
+void ExecutionGraph::_remove_if_unneeded( const ComputationId id )
+{
+  Computation & computation = computations_.at( id );
+  if ( computation.rev_deps.size() == 0 ) {
+    if ( computation.is_value() ) {
+      n_values--;
+    }
+    const auto deps = computation.deps;
+    _cut_dependencies( id );
+    computations_.erase( id );
+    for ( const ComputationId child_id : deps ) {
+      _remove_if_unneeded( child_id );
+    }
+  }
+}
+
 ComputationId ExecutionGraph::_follow_links( ComputationId id ) const
 {
   while (computations_.at( id ).is_link()) {
