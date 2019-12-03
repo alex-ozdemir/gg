@@ -166,6 +166,7 @@ void ExecutionGraph::_erase_dependency( const ComputationId from,
   parent.deps.erase( on );
   parent.dep_hashes.erase( on );
   child.rev_deps.erase( from );
+  _remove_if_unneeded( on );
 }
 
 void ExecutionGraph::_cut_dependencies( const ComputationId id )
@@ -173,6 +174,7 @@ void ExecutionGraph::_cut_dependencies( const ComputationId id )
   Computation & computation = computations_.at( id );
   for ( const ComputationId child : computation.deps ) {
     computations_.at( child ).rev_deps.erase( id );
+    _remove_if_unneeded( child );
   }
   computation.deps.clear();
   computation.dep_hashes.clear();
