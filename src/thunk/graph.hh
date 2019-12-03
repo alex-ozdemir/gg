@@ -90,14 +90,20 @@ private:
                            const ComputationId on );
 
   // Remove the dependency from `from` on `on`.
-  void _erase_dependency( const ComputationId from,
+  // Returns the hashes of any removed nodes
+  std::vector<Hash>
+  _erase_dependency( const ComputationId from,
                           const ComputationId on );
 
   // Cut the dependencies from `computation`
-  void _cut_dependencies( const ComputationId id );
+  // Returns the hashes of any removed nodes
+  std::vector<Hash>
+  _cut_dependencies( const ComputationId id );
 
   // Removes this node if it has no dependents. Recursive.
-  void _remove_if_unneeded( const ComputationId id );
+  // Returns the hashes of any removed nodes
+  std::vector<Hash>
+  _remove_if_unneeded( const ComputationId id );
 
   // Get a list of executable thunks
   std::unordered_set<Hash>
@@ -122,8 +128,11 @@ public:
   Optional<Hash> query_value( const Hash & hash ) const;
 
   // Informs that graph that `from` reduces to `to`.
-  // Returns newly executable thunks.
-  std::unordered_set<Hash>
+  // Returns a pair of newly executable thunks, and no-longer needed thunks.
+  std::pair<
+    std::unordered_set<Hash>,
+    std::vector<Hash>
+  >
   submit_reduction( const Hash & from, std::vector<gg::ThunkOutput> && to );
 
   // Get a list of executable thunks

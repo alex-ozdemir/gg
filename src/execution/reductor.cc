@@ -102,6 +102,7 @@ Reductor::Reductor( const vector<string> & target_hashes,
 
         unordered_set<string> thunk_o1_deps = dep_graph_.order_one_dependencies( hash );
         job_queue_.insert( job_queue_.end(), thunk_o1_deps.begin(), thunk_o1_deps.end() );
+        enqueued_jobs_.insert( thunk_o1_deps.begin(), thunk_o1_deps.end() );
       }
     } ).count();
 
@@ -155,6 +156,7 @@ Reductor::Reductor( const vector<string> & target_hashes,
 
       /* let's retry */
       job_queue_.push_back( old_hash );
+      enqueued_jobs_.insert( old_hash );
     };
 
 
@@ -182,10 +184,22 @@ void Reductor::finalize_execution( const string & old_hash,
   running_jobs_.erase( old_hash );
   const string main_output_hash = outputs.at( 0 ).hash;
 
-  unordered_set<string> new_o1s = dep_graph_.submit_reduction( old_hash, move ( outputs ) );
+  auto r = dep_graph_.submit_reduction( old_hash, move ( outputs ) );
+  unordered_set<string>& new_o1s = r.first;
+  const vector<string>& removed = r.second;
+
   estimated_cost_ += cost;
 
   job_queue_.insert( job_queue_.end(), new_o1s.begin(), new_o1s.end() );
+  enqueued_jobs_.insert( new_o1s.begin(), new_o1s.end() );
+
+  for ( const string& to_remove : removed ) {
+      if ( enqueued_jobs_.count( to_remove ) ) {
+          const auto i = find( job_queue_.begin(), job_queue_.end(), to_remove );
+          job_queue_.erase( i );
+          enqueued_jobs_.erase( to_remove );
+      }
+  }
 
   if ( gg::hash::type( main_output_hash ) == gg::ObjectType::Value ) {
     // TODO There may be a more efficient way to do this.
@@ -209,6 +223,7 @@ vector<string> Reductor::reduce()
 
       const string thunk_hash { move( job_queue_.front() ) };
       job_queue_.pop_front();
+      enqueued_jobs_.erase( thunk_hash );
 
       /* don't bother executing gg-execute if it's in the cache */
       Optional<ReductionResult> cache_entry;
@@ -290,6 +305,7 @@ vector<string> Reductor::reduce()
         }
         else if ( exec_state == FULL_CAPACITY or exec_state == FULL_FALLBACK_CAPACITY ) {
           job_queue_.push_front( thunk_hash );
+          enqueued_jobs_.insert( thunk_hash );
           break;
         }
         else { /* CANNOT_BE_EXECUTED */
@@ -312,6 +328,7 @@ vector<string> Reductor::reduce()
         if ( job.second.timeout != 0ms and
              ( clock_now - job.second.start ) > job.second.timeout ) {
           job_queue_.push_back( job.first );
+          enqueued_jobs_.insert( job.first );
           job.second.start = clock_now;
           job.second.timeout += job.second.restarts * job.second.timeout;
           job.second.restarts++;

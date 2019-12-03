@@ -68,7 +68,7 @@ void ExecutionGraph::_emplace_thunk( ComputationId id,
     // If we already have a node with this hash, link our node to it.
     const ComputationId target_id = ids_.at( hash );
     computation.is_link_ = true;
-    _cut_dependencies( id );
+    const auto removed = _cut_dependencies( id );
     _update( target_id );
     _create_dependency( id, hash, target_id );
   } else {
@@ -159,41 +159,50 @@ void ExecutionGraph::_create_dependency( const ComputationId from,
   child.rev_deps.insert( from );
 }
 
-void ExecutionGraph::_erase_dependency( const ComputationId from,
+std::vector<Hash>
+ExecutionGraph::_erase_dependency( const ComputationId from,
                                         const ComputationId on ) {
   Computation & parent = computations_.at( from );
   Computation & child = computations_.at( on );
   parent.deps.erase( on );
   parent.dep_hashes.erase( on );
   child.rev_deps.erase( from );
-  _remove_if_unneeded( on );
+  return _remove_if_unneeded( on );
 }
 
-void ExecutionGraph::_cut_dependencies( const ComputationId id )
+std::vector<Hash>
+ExecutionGraph::_cut_dependencies( const ComputationId id )
 {
+  std::vector<Hash> removed;
   Computation & computation = computations_.at( id );
   for ( const ComputationId child : computation.deps ) {
     computations_.at( child ).rev_deps.erase( id );
-    _remove_if_unneeded( child );
+    const auto r = _remove_if_unneeded( child );
+    removed.insert( removed.end(), r.begin(), r.end() );
   }
   computation.deps.clear();
   computation.dep_hashes.clear();
+  return removed;
 }
 
-void ExecutionGraph::_remove_if_unneeded( const ComputationId id )
+std::vector<Hash>
+ExecutionGraph::_remove_if_unneeded( const ComputationId id )
 {
+  std::vector<Hash> removed;
   Computation & computation = computations_.at( id );
-  if ( computation.rev_deps.size() == 0 ) {
+  if ( computation.is_thunk() and computation.rev_deps.size() == 0 ) {
     if ( computation.is_value() ) {
       n_values--;
     }
     const auto deps = computation.deps;
-    _cut_dependencies( id );
-    computations_.erase( id );
-    for ( const ComputationId child_id : deps ) {
-      _remove_if_unneeded( child_id );
+    const auto r = _cut_dependencies( id );
+    removed.insert( removed.end(), r.begin(), r.end() );
+    if ( computation.is_thunk() ) {
+      removed.push_back( computation.thunk.hash() );
     }
+    computations_.erase( id );
   }
+  return removed;
 }
 
 ComputationId ExecutionGraph::_follow_links( ComputationId id ) const
@@ -232,7 +241,10 @@ Optional<Hash> ExecutionGraph::query_value( const Hash & hash ) const {
   }
 }
 
-std::unordered_set<Hash>
+std::pair<
+  std::unordered_set<Hash>,
+  std::vector<Hash>
+>
 ExecutionGraph::submit_reduction( const Hash & from,
                                   std::vector<gg::ThunkOutput> && to )
 {
@@ -267,7 +279,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
 
   // Finally, accept the reduction
   _mark_out_of_date( id );
-  _cut_dependencies( id );
+  const auto removed = _cut_dependencies( id );
 
   string & new_hash = outputs.front().hash;
   const gg::ObjectType new_type = gg::hash::type( new_hash );
@@ -277,7 +289,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
     Thunk thunk { ThunkReader::read( gg::paths::blob( new_hash ), new_hash ) };
     // TODO check that value & executable deps are present
     _emplace_thunk( id, move( thunk ) );
-    return order_one_dependencies( id );
+    return { order_one_dependencies( id ), removed };
   } else {
     // A value -- return reverse dependencies
     computation.outputs = move( outputs );
@@ -294,7 +306,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
         next_to_execute.insert( parent.thunk.hash() );
       }
     }
-    return next_to_execute;
+    return { next_to_execute, removed };
   }
 }
 

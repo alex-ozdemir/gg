@@ -35,6 +35,7 @@ private:
   ExecutionGraph dep_graph_ {};
 
   std::deque<std::string> job_queue_ {};
+  std::unordered_set<std::string> enqueued_jobs_ {};
   std::unordered_map<std::string, JobInfo> running_jobs_ {};
   size_t finished_jobs_ { 0 };
   float estimated_cost_ { 0.0 };
