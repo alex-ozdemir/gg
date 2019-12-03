@@ -242,7 +242,7 @@ vector<string> Reductor::reduce()
         finalize_execution( thunk_hash, move( new_outputs ), 0 );
       }
       else {
-        const Thunk thunk { move( ThunkReader::read( gg::paths::blob( thunk_hash ), thunk_hash ) ) };
+        const Thunk thunk { ThunkReader::read( gg::paths::blob( thunk_hash ), thunk_hash ) };
 
         enum { CANNOT_BE_EXECUTED,
                FULL_CAPACITY,
