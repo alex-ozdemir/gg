@@ -7,6 +7,7 @@
 
 #include "response.hh"
 #include "thunk/ggutils.hh"
+#include "thunk/thunk_writer.hh"
 #include "net/http_response.hh"
 #include "net/nb_secure_socket.hh"
 #include "util/base64.hh"
@@ -128,7 +129,7 @@ size_t AWSLambdaExecutionEngine::job_count() const
 
 bool AWSLambdaExecutionEngine::can_execute( const gg::thunk::Thunk & thunk ) const
 {
-  return thunk.infiles_size() < 230_MiB;
+  return thunk.infiles_size() < 230_MiB && ThunkWriter::serialize( thunk ).size() <= 5_MiB;
 }
 
 float AWSLambdaExecutionEngine::compute_cost( const chrono::steady_clock::time_point & begin,
