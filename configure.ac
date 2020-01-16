@@ -32,6 +32,23 @@ AC_SUBST(EXTRA_CXXFLAGS)
 
 # Checks for libraries.
 PKG_CHECK_MODULES([CRYPTO],[libcrypto++])
+PKG_CHECK_VAR([CRYPTO_INC_BASE],
+              [libcrypto++],
+              [includedir])
+AC_CHECK_FILE(["${CRYPTO_INC_BASE}/cryptopp"],
+              [
+               AC_MSG_NOTICE(["Found crypto++ headers in ${CRYPTO_INC_BASE}/cryptopp"])
+               AC_MSG_NOTICE(["Found crypto++ headers in ${CRYPTO_INC_BASE}/cryptopp"])
+               AC_DEFINE([CRYPTO_INCLUDES_IN_CRYPTOPP], [1], ["Setting CRYPTO_INCLUDES_IN_CRYPTOPP to 1"])
+              ],
+              [
+               AC_CHECK_FILE(["${CRYPTO_INC_BASE}/crypto++"],
+                             [AC_MSG_NOTICE(["Found crypto++ headers in ${CRYPTO_INC_BASE}/crypto++"])],
+                             [AC_MSG_FAILURE(["Could not find crypto++ headers"])]
+                             )
+              ]
+              )
+AC_DEFINE([CRYPTO_INCLUDES_IN_CRYPTOPP], [1], ["Setting CRYPTO_INCLUDES_IN_CRYPTOPP to 1"])
 PKG_CHECK_MODULES([SSL],[libssl libcrypto])
 PKG_CHECK_MODULES([PROTOBUF], [protobuf])
 PKG_CHECK_MODULES([HIREDIS], [hiredis])
