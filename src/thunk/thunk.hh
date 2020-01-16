@@ -19,7 +19,6 @@
 #include "protobufs/gg.pb.h"
 #include "sandbox/sandbox.hh"
 #include "util/optional.hh"
-#include "util/path.hh"
 
 namespace gg {
 

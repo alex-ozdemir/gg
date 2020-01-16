@@ -67,7 +67,7 @@ vector<string> execute_thunk( const Thunk & original_thunk )
      to the .gg directory. */
 
   // PREPARING THE ENV
-  TempDirectory exec_dir { temp_dir_template };
+  TempDirectory exec_dir { temp_dir_template + string(".") + thunk.hash().substr(0,10) };
   roost::path exec_dir_path { exec_dir.name() };
   roost::path outfile_path { "output" };
 

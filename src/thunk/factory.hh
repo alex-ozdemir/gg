@@ -53,8 +53,7 @@ public:
 
   public:
     Output( const std::string & tag ) : tag_( tag ) {}
-    Output( const std::string & tag, const std::string & filename )
-      : tag_( tag ), filename_( true, roost::path( filename ).lexically_normal().string() ) {}
+    Output( const std::string & tag, const std::string & filename );
 
     const std::string & tag() const { return tag_; }
     const Optional<std::string> & filename() const { return filename_; }

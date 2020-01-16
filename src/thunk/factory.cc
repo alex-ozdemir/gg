@@ -47,6 +47,9 @@ ThunkFactory::Data::Data( const string & filename,
   }
 }
 
+ThunkFactory::Output::Output( const std::string & tag, const std::string & filename )
+      : tag_( tag ), filename_( true, roost::path( filename ).lexically_normal().string() ) {}
+
 Thunk ThunkFactory::create_thunk( const Function & function,
                                   const vector<Data> & data,
                                   const vector<Data> & executables,

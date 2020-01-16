@@ -70,14 +70,19 @@ private:
   ComputationId next_id_ {0};
 
   // Place the thunk at the indicated location, and pull in dependencies
-  void _emplace_thunk( ComputationId id,
-                       gg::thunk::Thunk && thunk );
+  // Returns any new order one dependencies.
+  std::unordered_set<Hash> _emplace_thunk( ComputationId id,
+                                           gg::thunk::Thunk && thunk );
 
   // Given a computation `id`, ensures that said `id` either:
   //    * refers to a value OR
   //    * refers to an up-to-date computation (one with a thunk that reflects
   //    the current comptution)
   void _update( const ComputationId id );
+
+  // Given a computation `id`, updates all parents (and parents of links)
+  // and returns all that have been updated to be executable.
+  std::unordered_set<ComputationId> _update_parent_thunks( const ComputationId id );
 
   // Given a computation `id`, marks this `id` (and all transitive dependents)
   // as out-of-date.
@@ -105,24 +110,20 @@ private:
   std::vector<Hash>
   _remove_if_unneeded( const ComputationId id );
 
-  // Get a list of executable thunks
-  std::unordered_set<Hash>
-  order_one_dependencies( const ComputationId id ) const;
-
   // Given `id`, follow link pointer until a computation that does not have any
   // links.
   ComputationId _follow_links( const ComputationId id ) const;
 
-  // Given an `id`, returns all ancestor computations that have one thunk on the
-  // path from them to this `id`.
-  std::unordered_set<ComputationId>
-  _one_thunk_ancestors( const ComputationId id ) const;
-
 public:
+  ExecutionGraph() = default;
+  ExecutionGraph(const ExecutionGraph& other) = delete;
+  ExecutionGraph & operator=(const ExecutionGraph& other) = delete;
 
   // Adds a computation for this thunk to the graph. A No-op if present.
   // If `trace` is set, then this thunk will be queryable
-  ComputationId add_thunk( const Hash & hash );
+  // Returns the id of the added thunk, and the hash of any new order-one
+  // dependencies.
+  std::pair<ComputationId, std::unordered_set<Hash>> add_thunk( const Hash & hash );
 
   // Given a `hash`, determines the value of that hash, if it is known.
   Optional<Hash> query_value( const Hash & hash ) const;
@@ -134,10 +135,6 @@ public:
     std::vector<Hash>
   >
   submit_reduction( const Hash & from, std::vector<gg::ThunkOutput> && to );
-
-  // Get a list of executable thunks
-  std::unordered_set<Hash>
-  order_one_dependencies( const Hash & hash ) const;
 
   // Get initial blobs that the computation is dependent on
   const std::unordered_set<Hash> &

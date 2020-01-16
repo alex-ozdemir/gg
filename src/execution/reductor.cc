@@ -98,9 +98,7 @@ Reductor::Reductor( const vector<string> & target_hashes,
     [this] ()
     {
       for ( const string & hash : target_hashes_ ) {
-        dep_graph_.add_thunk( hash );
-
-        unordered_set<string> thunk_o1_deps = dep_graph_.order_one_dependencies( hash );
+        unordered_set<string> thunk_o1_deps = dep_graph_.add_thunk( hash ).second;
         job_queue_.insert( job_queue_.end(), thunk_o1_deps.begin(), thunk_o1_deps.end() );
         enqueued_jobs_.insert( thunk_o1_deps.begin(), thunk_o1_deps.end() );
       }
@@ -205,7 +203,7 @@ void Reductor::finalize_execution( const string & old_hash,
     // TODO There may be a more efficient way to do this.
     const ExecutionGraph & graph = dep_graph_;
     remaining_targets_.erase(
-      remove_if( remaining_targets_.begin(), remaining_targets_.end(), [graph] (auto t) {
+      remove_if( remaining_targets_.begin(), remaining_targets_.end(), [&graph] (auto t) {
         return graph.query_value( t ).initialized();
       } ),
       remaining_targets_.end()
@@ -285,6 +283,7 @@ vector<string> Reductor::reduce()
                 exec_state = FULL_FALLBACK_CAPACITY;
                 continue;
               }
+              cerr << "Using fallback engine for " << thunk.hash() << endl;
 
               fallback_engine->force_thunk( thunk, exec_loop_ );
               exec_state = EXECUTING;
