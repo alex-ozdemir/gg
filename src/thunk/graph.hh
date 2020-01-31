@@ -17,6 +17,12 @@
 
 typedef std::string Hash;
 
+enum class ComputationKind {
+  VALUE,    // This node has been evalutated
+  THUNK,    // This node is unevaluated
+  LINK      // This node is unevaluated and is a copy of another
+};
+
 // A computation denotes a node in the graph which is in the process of being reduced.
 // If (+ 3 4) was reduced to 7, then both would have the same ComputationId,
 // just at different points in time.
@@ -43,8 +49,9 @@ struct Computation {
 
   Computation( gg::thunk::Thunk && thunk );
 
-  bool is_value() const { return not outputs.empty(); }
-  bool is_link() const { return is_link_; }
+  ComputationKind kind() const;
+  bool is_value() const { return outputs.size(); }
+  bool is_link() const { return outputs.empty() and is_link_; }
   bool is_thunk() const { return outputs.empty() and not is_link_; }
 
   // Return whether a reduction from `hash` is applicable to this node.

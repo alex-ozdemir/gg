@@ -19,9 +19,19 @@ using namespace gg::thunk;
 Computation::Computation( Thunk && thunk )
   : thunk( move( thunk ) ) {}
 
+ComputationKind Computation::kind() const {
+  if ( outputs.size() ) {
+    return ComputationKind::VALUE;
+  } else if ( is_link_ ) {
+    return ComputationKind::LINK;
+  } else {
+    return ComputationKind::THUNK;
+  }
+}
+
 bool Computation::is_reducible_from_hash( const string & hash ) const
 {
-  return is_thunk() and up_to_date and thunk.hash() == hash;
+  return kind() == ComputationKind::THUNK and up_to_date and thunk.hash() == hash;
 }
 
 std::pair<ComputationId, std::unordered_set<Hash>>
@@ -115,47 +125,65 @@ void ExecutionGraph::_mark_out_of_date( const ComputationId id )
 void ExecutionGraph::_update( const ComputationId id )
 {
   Computation & computation = computations_.at( id );
-  // Our computation could be an (out of date) link
-  if ( computation.is_link() and not computation.up_to_date ) {
-    // Check the (single) child for valuation
-    ComputationId child_id = *computation.deps.begin();
-    Computation & child = computations_.at( child_id );
-    _update( child_id );
-    if ( child.is_value() ) {
-      computation.is_link_ = false;
-      computation.outputs = child.outputs;
-      n_values++;
-      assert( computation.deps.size() == 1);
-      _erase_dependency( id, child_id );
-      assert( computation.deps.empty() );
-    }
-  // Or it could be an (out of date) thunk
-  } else if ( computation.is_thunk() and not computation.up_to_date ) {
-    // update all dependencies
-    std::unordered_set<ComputationId> deps{computation.deps};
-    for ( const ComputationId child_id : deps ) {
-      _update( child_id );
-      Computation & child = computations_.at( child_id );
-      string old_hash = computation.dep_hashes.at( child_id );
-      if ( child.is_value() ) {
-        computation.thunk.update_data( old_hash, child.outputs );
-        _erase_dependency( id, child_id );
-      } else {
-        string new_hash = child.thunk.hash();
-        computation.thunk.update_data( old_hash, { { new_hash, "" } } );
-        computation.dep_hashes[ child_id ] = new_hash;
+
+  if ( computation.up_to_date ) {
+    return;
+  }
+
+  switch ( computation.kind() ) {
+    case ComputationKind::THUNK:
+    {
+      // update all dependencies, and update our hash-pointer to them.
+      const auto deps{computation.deps};
+      for ( const ComputationId child_id : deps ) {
+        _update( child_id );
+        Computation & child = computations_.at( child_id );
+        string old_hash = computation.dep_hashes.at( child_id );
+        if ( child.is_value() ) {
+          computation.thunk.update_data( old_hash, child.outputs );
+          _erase_dependency( id, child_id );
+        } else {
+          string new_hash = child.thunk.hash();
+          computation.thunk.update_data( old_hash, { { new_hash, "" } } );
+          computation.dep_hashes[ child_id ] = new_hash;
+        }
       }
+
+      // Compute our new hash.
+      const string & hash = computation.thunk.hash();
+
+      // Check if we're a link.
+      if ( ids_.count( hash ) and ids_.at( hash ) != id ) {
+        computation.is_link_ = true;
+        _cut_dependencies( id );
+        _create_dependency( id, hash, ids_.at( hash ) );
+        _update( id );
+      }
+      break;
     }
-    const string & hash = computation.thunk.hash();
-    if ( ids_.count( hash ) and ids_.at( hash ) != id ) {
-      computation.is_link_ = true;
-      _cut_dependencies( id );
-      _create_dependency( id, hash, ids_.at( hash ) );
-      _update( id );
-    } else {
-      ThunkWriter::write(computation.thunk);
+    case ComputationKind::LINK:
+    {
+      // Set our value if our child has a value.
+      ComputationId child_id = *computation.deps.begin();
+      Computation & child = computations_.at( child_id );
+      _update( child_id );
+      if ( child.is_value() ) {
+        computation.is_link_ = false;
+        computation.outputs = child.outputs;
+        n_values++;
+        assert( computation.deps.size() == 1);
+        _erase_dependency( id, child_id );
+        assert( computation.deps.empty() );
+      }
+      break;
+    }
+    case ComputationKind::VALUE:
+    default:
+    {
+      // empty
     }
   }
+
   computation.up_to_date = true;
 }
 
@@ -171,24 +199,35 @@ ExecutionGraph::_update_parent_thunks( const ComputationId id )
     const ComputationId id = to_update.front();
     to_update.pop();
     Computation & computation = computations_.at( id );
-    if ( computation.is_value() ) {
-      // Pass.
-      //throw runtime_error("Computation " + to_string(id) + " is a value in _update_parent_thunks");
-    } else if ( computation.is_link() ) {
-      _update( id );
-      for ( const ComputationId parent_id : computation.rev_deps ) {
-        to_update.push( parent_id );
-      }
-    } else if ( computation.is_thunk() ) {
-      if ( not computation.up_to_date ) {
+    switch ( computation.kind() )
+    {
+      case ComputationKind::LINK:
+      {
         _update( id );
-        if ( computation.is_thunk() ) {
-          updated.insert( id );
-        } else {
-          for ( const ComputationId parent_id : computation.rev_deps ) {
-            to_update.push( parent_id );
+        for ( const ComputationId parent_id : computation.rev_deps ) {
+          to_update.push( parent_id );
+        }
+        break;
+      }
+      case ComputationKind::THUNK:
+      {
+        if ( not computation.up_to_date ) {
+          _update( id );
+          if ( computation.is_thunk() ) {
+            updated.insert( id );
+          } else {
+            for ( const ComputationId parent_id : computation.rev_deps ) {
+              to_update.push( parent_id );
+            }
           }
         }
+        break;
+      }
+      case ComputationKind::VALUE:
+      default:
+      {
+        throw runtime_error("Computation " + to_string(id) + " is a value in _update_parent_thunks");
+        break;
       }
     }
   }
