@@ -28,6 +28,8 @@ enum class ComputationKind {
 // just at different points in time.
 typedef size_t ComputationId;
 struct Computation {
+  Computation(const Computation& other) = default;
+  Computation & operator=(const Computation& other) = default;
   // Whether the `thunk` field accurately reflects the current state
   bool up_to_date {false};
   // The executable (but potentially out-of-date) thunk
@@ -58,11 +60,16 @@ struct Computation {
   bool is_reducible_from_hash( const std::string& hash ) const;
 };
 
+using HashSet = std::unordered_set<Hash>;
+using IdSet = std::unordered_set<ComputationId>;
+
 class ExecutionGraph
 {
 private:
   // Computations, maybe irreducible, maybe not
   std::unordered_map<ComputationId, Computation> computations_ {};
+
+  bool verbose;
 
   // Number of computations that are now values
   size_t n_values {0};
@@ -72,24 +79,25 @@ private:
 
   // The hashes of pre-existing blobs (values or executables) that this
   // function depends on.
-  std::unordered_set<Hash> blob_dependencies_ {};
+  HashSet blob_dependencies_ {};
 
   ComputationId next_id_ {0};
 
   // Place the thunk at the indicated location, and pull in dependencies
   // Returns any new order one dependencies.
-  std::unordered_set<Hash> _emplace_thunk( ComputationId id,
+  HashSet _emplace_thunk( ComputationId id,
                                            gg::thunk::Thunk && thunk );
 
   // Given a computation `id`, ensures that said `id` either:
   //    * refers to a value OR
   //    * refers to an up-to-date computation (one with a thunk that reflects
   //    the current comptution)
-  void _update( const ComputationId id );
+  // Returns any newly-executable thunks.
+  IdSet _update( const ComputationId id );
 
   // Given a computation `id`, updates all parents (and parents of links)
-  // and returns all that have been updated to be executable.
-  std::unordered_set<ComputationId> _update_parent_thunks( const ComputationId id );
+  // and returns all ids that have been updated to be executable.
+  IdSet _update_parent_thunks( const ComputationId id );
 
   // Given a computation `id`, marks this `id` (and all transitive dependents)
   // as out-of-date.
@@ -121,31 +129,30 @@ private:
   // links.
   ComputationId _follow_links( const ComputationId id ) const;
 
+  std::pair<ComputationId, HashSet> add_inner_thunk( const Hash & hash );
+  // Adds a computation for this thunk to the graph. A No-op if present.
+  // Returns the id of the added thunk, and the hash of any new order-one
+  // dependencies.
+  std::pair<ComputationId, HashSet> add_thunk_common( const Hash & hash );
+
 public:
-  ExecutionGraph() = default;
+  ExecutionGraph();
   ExecutionGraph(const ExecutionGraph& other) = delete;
   ExecutionGraph & operator=(const ExecutionGraph& other) = delete;
 
-  // Adds a computation for this thunk to the graph. A No-op if present.
-  // If `trace` is set, then this thunk will be queryable
-  // Returns the id of the added thunk, and the hash of any new order-one
-  // dependencies.
-  std::pair<ComputationId, std::unordered_set<Hash>> add_thunk( const Hash & hash );
+  // Adds a computation for this thunk to the graph.
+  std::pair<ComputationId, HashSet> add_thunk( const Hash & hash );
 
   // Given a `hash`, determines the value of that hash, if it is known.
   Optional<Hash> query_value( const Hash & hash ) const;
 
   // Informs that graph that `from` reduces to `to`.
   // Returns a pair of newly executable thunks, and no-longer needed thunks.
-  std::pair<
-    std::unordered_set<Hash>,
-    std::vector<Hash>
-  >
-  submit_reduction( const Hash & from, std::vector<gg::ThunkOutput> && to );
+  std::pair<HashSet, std::vector<Hash>>
+  submit_reduction( const Hash& from, std::vector<gg::ThunkOutput>&& to );
 
   // Get initial blobs that the computation is dependent on
-  const std::unordered_set<Hash> &
-  blob_dependencies() const { return blob_dependencies_; }
+  const HashSet & blob_dependencies() const { return blob_dependencies_; }
 
   size_t size() const { return computations_.size() - n_values; }
 };
