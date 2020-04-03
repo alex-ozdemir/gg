@@ -158,6 +158,15 @@ vector<string> execute_thunk( const Thunk & original_thunk )
     }
   }
 
+  try {
+    exec_dir.remove();
+  } catch ( const unix_error& e ) {
+    throw runtime_error( string("After ")
+        + original_thunk.hash()
+        + string( " executed, it left some files behind in its execution directory: " )
+        + exec_dir.name() );
+  }
+
   return output_hashes;
 }
 
