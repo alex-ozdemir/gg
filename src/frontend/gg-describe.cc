@@ -6,6 +6,7 @@
 #include <fstream>
 #include <getopt.h>
 #include <glob.h>
+#include <string>
 
 #include "protobufs/util.hh"
 #include "thunk/thunk.hh"
@@ -85,6 +86,11 @@ int main( int argc, char * argv[] )
                       nullptr, &glob_result ) == 0 ) {
           if ( glob_result.gl_pathc > 1 ) {
             cerr << "Partial hash, multiple matches found." << endl;
+            for ( size_t glob_i = 0; glob_i < glob_result.gl_pathc; ++glob_i ) {
+              string path = glob_result.gl_pathv[ glob_i ];
+              string filename = basename(path.c_str());
+              cerr << "  * " << filename << endl;
+            }
             return EXIT_FAILURE;
           }
           else if ( glob_result.gl_pathc == 1 ) {
