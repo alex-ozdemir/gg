@@ -98,6 +98,10 @@ int main( int argc, char * argv[] )
             cerr << thunk_path.string() << endl;
           }
         }
+        else {
+          cerr << "No hashes found with this prefix " << endl;
+          return EXIT_FAILURE;
+        }
 
         globfree( &glob_result );
       }

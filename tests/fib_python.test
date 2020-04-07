@@ -1,0 +1,9 @@
+#!/bin/bash -xe
+
+cd ${TEST_TMPDIR}
+
+export PATH=${abs_builddir}/../src/models:${abs_builddir}/../src/frontend:$PATH
+
+${abs_srcdir}/../examples/fib-python/init.sh ${abs_builddir}/../examples/fib-python/fib.py ${abs_builddir}/../examples/fib-python/sum.py 70
+GG_FORCE_NO_STATUS=1 gg-force f*
+diff f* <(echo 190392490709135)

@@ -20,7 +20,7 @@ bin_PROGRAMS = gg gg-trace gg-describe gg-force-and-run gg-force gg-mock \
                gg-execute gg-infer gg-thunksummary gg-s3-upload \
                gg-s3-download gg-init gg-hash gg-create-thunk gg-collect \
                gg-put gg-get gg-execute-server gg-meow-worker gg-object-server \
-               lambda-invoker prune-file splice-lines
+               lambda-invoker prune-file splice-lines gg-create-thunk-static
 
 dist_bin_SCRIPTS = gg-create-blueprints gg-collect-dir gg-build-infer
 
@@ -65,11 +65,19 @@ gg_init_LDADD = $(BASE_LDADD)
 gg_hash_SOURCES = gg-hash.cc
 gg_hash_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS)
 
+## gg_hash_static_SOURCES = gg-hash.cc
+## gg_hash_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS) -ldl -lz
+## gg_hash_static_LDFLAGS = -static -s -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
+
 gg_collect_SOURCES = gg-collect.cc
 gg_collect_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS)
 
 gg_create_thunk_SOURCES = gg-create-thunk.cc
 gg_create_thunk_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS)
+
+gg_create_thunk_static_SOURCES = gg-create-thunk.cc
+gg_create_thunk_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS) -ldl -lz
+gg_create_thunk_static_LDFLAGS = -static -s -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
 
 gg_s3_upload_SOURCES = gg-s3-upload.cc
 gg_s3_upload_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)

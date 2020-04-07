@@ -133,12 +133,7 @@ int main( int argc, char * argv[] )
 
     thunk.set_timeout( timeout );
 
-    if ( output_path.size() ) {
-      ThunkWriter::write( thunk, output_path );
-      return EXIT_SUCCESS;
-    }
-
-    string thunk_hash = ThunkWriter::write( thunk );
+    string thunk_hash = ThunkWriter::write( thunk, output_path );
 
     if ( placeholder_path.size() ) {
       ThunkPlaceholder placeholder { thunk_hash };

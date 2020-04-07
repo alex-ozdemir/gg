@@ -59,7 +59,7 @@ Poller::Result Poller::poll( const int timeout_ms )
   /* Quit if no member in pollfds_ has a non-zero direction */
   if ( not accumulate( pollfds_.begin(), pollfds_.end(), false,
                        [] ( bool acc, pollfd x ) { return acc or x.events; } ) ) {
-    std::cerr << "No no-zero direction" << std::endl;
+    std::cerr << "No non-zero direction" << std::endl;
     return Result::Type::Exit;
   }
 
