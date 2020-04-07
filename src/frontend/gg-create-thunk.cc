@@ -26,6 +26,7 @@ void usage( const char * argv0 )
        << "\t[--output, -o <tag>]..." << endl
        << "\t[--placeholder, -C <arg>]" << endl
        << "\t[--timeout, -T <arg (ms)>]" << endl
+       << "\t[--output-path, -p <path>]" << endl
        << "\tFUNCTION-HASH FUNCTION-ARG..." << endl;
 }
 
@@ -50,11 +51,13 @@ int main( int argc, char * argv[] )
       { "output",      required_argument, nullptr, 'o' },
       { "placeholder", required_argument, nullptr, 'C' },
       { "timeout",     required_argument, nullptr, 'T' },
+      { "output-path", required_argument, nullptr, 'p' },
       { nullptr, 0, nullptr, 0 }
     };
 
     string placeholder_path;
     string function_hash;
+    string output_path;
     vector<string> function_args;
     vector<string> function_envars;
     vector<Thunk::DataItem> values;
@@ -65,7 +68,7 @@ int main( int argc, char * argv[] )
     milliseconds timeout = 0s;
 
     while ( true ) {
-      const int opt = getopt_long( argc, argv, "E:v:t:e:o:C:T:f:", cmd_options, nullptr );
+      const int opt = getopt_long( argc, argv, "E:v:t:e:o:C:T:f:p:", cmd_options, nullptr );
 
       if ( opt == -1 ) { break; }
 
@@ -98,6 +101,10 @@ int main( int argc, char * argv[] )
         placeholder_path = optarg;
         break;
 
+      case 'p':
+        output_path = optarg;
+        break;
+
       case 'T':
         timeout = milliseconds { stoul( optarg ) };
         break;
@@ -125,6 +132,11 @@ int main( int argc, char * argv[] )
                   move( executables ), move( outputs ), move( futures ) };
 
     thunk.set_timeout( timeout );
+
+    if ( output_path.size() ) {
+      ThunkWriter::write( thunk, output_path );
+      return EXIT_SUCCESS;
+    }
 
     string thunk_hash = ThunkWriter::write( thunk );
 

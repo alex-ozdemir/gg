@@ -14,7 +14,7 @@ using namespace std;
 
 UniqueDirectory::UniqueDirectory( const string & dirname_template )
   : mutable_temp_dirname_( to_mutable( dirname_template + ".XXXXXX" ) ),
-    owns_dir_( false )
+    owns_dir_( true )
 {
   if ( mkdtemp( &mutable_temp_dirname_[ 0 ] ) == NULL ) {
     throw unix_error( "mkdtemp " + name() );
@@ -29,21 +29,16 @@ TempDirectory::~TempDirectory()
 
 void TempDirectory::remove()
 {
-  if ( owns_dir_ ) { return; }
-  owns_dir_ = true;
-  try {
-    CheckSystemCall( "rmdir " + name(), rmdir( name().c_str() ) );
-  }
-  catch ( const exception & e ) {
-    cerr << e.what() << endl;
-  }
+  if ( not owns_dir_ ) { return; }
+  owns_dir_ = false;
+  CheckSystemCall( "rmdir " + name(), rmdir( name().c_str() ) );
 }
 
 UniqueDirectory::UniqueDirectory( UniqueDirectory && other )
   : mutable_temp_dirname_( other.mutable_temp_dirname_ ),
-    owns_dir_( false )
+    owns_dir_( true )
 {
-  other.owns_dir_ = true;
+  other.owns_dir_ = false;
 }
 
 string UniqueDirectory::name( void ) const

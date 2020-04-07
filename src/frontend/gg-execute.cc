@@ -159,11 +159,14 @@ vector<string> execute_thunk( const Thunk & original_thunk )
   }
 
   try {
+    cerr << "going to rm" << endl;
     exec_dir.remove();
+    cerr << "done with rm" << endl;
   } catch ( const unix_error& e ) {
-    throw runtime_error( string("After ")
+    cerr << "rm failed" << endl;
+    throw runtime_error( string("After\n\t")
         + original_thunk.hash()
-        + string( " executed, it left some files behind in its execution directory: " )
+        + string( "\nexecuted, it left some files behind in its execution directory:\n\t" )
         + exec_dir.name() );
   }
 
