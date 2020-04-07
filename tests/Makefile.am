@@ -32,7 +32,7 @@ dist_check_SCRIPTS = fetch-vectors.test \
                      mosh-fewer-thunks.test fibonacci.test \
                      sleep.test sdk.test cleanup.test \
                      sdk.test cleanup.test \
-                     describe-value.test
+                     describe-value.test non_empty_error.test
 
 thunk_roundtrip_SOURCES = thunk-roundtrip.cc
 sandbox_test_SOURCES = sandbox-test.cc

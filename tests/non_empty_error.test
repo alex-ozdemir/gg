@@ -1,0 +1,20 @@
+#!/bin/bash -x
+
+cd ${TEST_TMPDIR}
+
+export PATH=${abs_builddir}/../src/models:${abs_builddir}/../src/frontend:$PATH
+
+${abs_srcdir}/../examples/echo-python/create.sh "${abs_builddir}/../examples/echo-python/echo.py" hi
+output=$(GG_FORCE_NO_STATUS=1 gg-force out 2>&1)
+if [[ $? == 0 ]]
+then
+    echo "Error: should error b/c non-empty exec directory"
+    exit 1
+fi
+if [[ "$output" =~ "it left some files" ]]
+then
+    echo "Good"
+else
+    echo "Error: error message should contain 'it left some files'"
+    exit 1
+fi
