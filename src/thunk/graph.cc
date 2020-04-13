@@ -136,6 +136,11 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
 
   // Update our thunk
   _update( id );
+  if ( computation.thunk.can_be_executed() ) {
+    new_o1s.insert( computation.thunk.hash() );
+    ThunkWriter::write( computation.thunk );
+    ids_[ computation.thunk.hash() ] = id;
+  }
   return new_o1s;
 }
 
@@ -393,6 +398,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
   if ( verbose ) cerr << "  id " << id << endl;
   Computation & computation = computations_.at( id );
   if ( not computation.is_reducible_from_hash( from ) ) {
+    if ( verbose ) cerr << " discarding update: old" << endl;
     return {};
   }
 

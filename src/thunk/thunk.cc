@@ -239,8 +239,10 @@ int Thunk::execute() const
 
   if ( ( retval = ezexec( gg::paths::blob( function_.hash() ).string(),
                           args, envars ) ) < 0 ) {
-    string msg = "execvpe failed: ";
+    string msg = "execve failed: ";
     msg += strerror(errno);
+    msg += "\nExecutable:\n\t";
+    msg += gg::paths::blob( function_.hash() ).string();
     throw runtime_error( msg );
   }
 
