@@ -1,15 +1,17 @@
 #! /usr/bin/python3.7
-import os, sys, importlib as il
+import os, sys
+from importlib.util import spec_from_loader, module_from_spec
+from importlib.machinery import SourceFileLoader
 
-if os.path.exists(sys.argv[1]):
-    spec = il.util.spec_from_loader(
-        "pygg", il.machinery.SourceFileLoader("pygg", os.path.realpath(sys.argv[1]))
-    )
-    pygg = il.util.module_from_spec(spec)
-    spec.loader.exec_module(pygg)
-    del sys.argv[1]
-else:
+if not os.path.exists(sys.argv[1]):
     import pygg
+else:
+    spec = spec_from_loader(
+        "pygg", SourceFileLoader("pygg", os.path.realpath(sys.argv[1]))
+    )
+    pygg = module_from_spec(spec)
+    spec.loader.exec_module(pygg) # type: ignore
+    del sys.argv[1]
 
 
 @pygg.thunk_fn
