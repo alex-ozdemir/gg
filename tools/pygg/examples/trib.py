@@ -1,4 +1,7 @@
 #! /usr/bin/python3.7
+# ARGS: trib 5
+# RESULT: 11
+# Copied
 import os, sys
 from importlib.util import spec_from_loader, module_from_spec
 from importlib.machinery import SourceFileLoader
@@ -13,15 +16,17 @@ else:
     spec.loader.exec_module(pygg) # type: ignore
     del sys.argv[1]
 
+# End copy
 
 @pygg.thunk_fn
-def fib(gg: pygg.GG, n: int) -> pygg.Term:
-    if n < 2:
+def trib(gg: pygg.GG, n: int) -> pygg.Term:
+    if n < 3:
         return gg.str_value(str(n))
     else:
-        a = gg.thunk(fib, [n - 1])
-        b = gg.thunk(fib, [n - 2])
-        return gg.thunk(add_str, [a, b])
+        a = gg.thunk(trib, [n - 1])
+        b = gg.thunk(trib, [n - 2])
+        c = gg.thunk(trib, [n - 3])
+        return gg.thunk(add_str, [gg.thunk(add_str, [a, b]), c])
 
 
 @pygg.thunk_fn
