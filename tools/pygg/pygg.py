@@ -33,6 +33,7 @@ lib_path = os.path.realpath(__file__)
 
 T = TypeVar("T")
 
+
 def unwrap(t: Optional[T]) -> T:
     if t is None:
         raise ValueError("Unwrapped empty Optional")
@@ -131,7 +132,7 @@ class Thunk:
     args: List  # TODO: articulate
     executable: bool
 
-    def __init__(self, f: Callable, args: List, dec_from_str: bool, gg: 'GG'):
+    def __init__(self, f: Callable, args: List, dec_from_str: bool, gg: "GG"):
         self.f = f  # type: ignore
         self.args = []
         self.executable = True
@@ -209,7 +210,9 @@ class GG:
     gg_hash_bin: Value
     gg_create_thunk_bin: Value
 
-    def __init__(self, lib: Value, script: Value, gg_create_thunk_bin: Value, gg_hash_bin: Value):
+    def __init__(
+        self, lib: Value, script: Value, gg_create_thunk_bin: Value, gg_hash_bin: Value
+    ):
         self.lib = lib
         self.script = script
         self.gg_create_thunk_bin = gg_create_thunk_bin
@@ -283,8 +286,8 @@ class GG:
         ]
         thunks = []
         values = [
-                self.lib.hash(),
-                ]
+            self.lib.hash(),
+        ]
         fparams = inspect.getfullargspec(f).args
         if len(args) + 1 != len(fparams):
             raise e("The number of formal and actual params are not equal")
@@ -375,7 +378,6 @@ class GGWorker(GG):
         return (f"{i:03}" for i in range(self.nextOutput, self.nOuputs))
 
 
-
 class GGCoordinator(GG):
     def __init__(self):
         script = Value(self, script_path, None, None, True)
@@ -393,7 +395,7 @@ class GGCoordinator(GG):
         return sub.check_output([which("gg-collect"), path]).decode().strip()
 
     def init(self):
-        sub.check_call(["rm -rf .gg",], shell = True)
+        sub.check_call(["rm -rf .gg",], shell=True)
         sub.check_call([which("gg-init")])
 
     def _save_bytes(self, data: bytes, dest_path: Optional[str]) -> Hash:
@@ -462,6 +464,7 @@ def thunk_fn(func):
     GG_STATE.thunk_functions[name] = func
     return func
 
+
 def gg_root(args: List[str]):
     gg = GGCoordinator()
 
@@ -494,7 +497,7 @@ def gg_exec(args: List[str]):
     result = t.exec(gg)
     gg.save(result, "out")
     for path in gg.unused_outputs():
-        pathlib.Path(path).touch(exist_ok = False)
+        pathlib.Path(path).touch(exist_ok=False)
 
 
 def main():

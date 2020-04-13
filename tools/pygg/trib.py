@@ -13,13 +13,14 @@ else:
 
 
 @pygg.thunk_fn
-def fib(gg: pygg.GG, n: int) -> pygg.Term:
-    if n < 2:
+def trib(gg: pygg.GG, n: int) -> pygg.Term:
+    if n < 3:
         return gg.str_value(str(n))
     else:
-        a = gg.thunk(fib, [n - 1])
-        b = gg.thunk(fib, [n - 2])
-        return gg.thunk(add_str, [a, b])
+        a = gg.thunk(trib, [n - 1])
+        b = gg.thunk(trib, [n - 2])
+        c = gg.thunk(trib, [n - 3])
+        return gg.thunk(add_str, [gg.thunk(add_str, [a, b]), c])
 
 
 @pygg.thunk_fn
