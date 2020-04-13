@@ -10,6 +10,7 @@ from typing import (
     Iterable,
     BinaryIO,
     TypeVar,
+    Sequence,
 )
 import subprocess as sub
 import shutil as sh
@@ -108,15 +109,6 @@ class Value:
                 self._hash = gg_hash(self._bytes, "V")
         return self._hash
 
-    def force(self, gg) -> "Value":
-        return self
-
-    def _check(self):
-        """ Invariant that must always be satisfied """
-        assert (
-            self.path is not None or self._bytes is not None or self._hash is not None
-        )
-
 
 GG_TERM_TYS = ["Thunk", Value]
 Term = Union["Thunk", Value]
@@ -124,15 +116,40 @@ Term = Union["Thunk", Value]
 GG_PRIM_TYS = [str, int, float]
 Prim = Union[str, int, float]
 
-Arg = Union["Thunk", Value, str, int, float]
+GG_THUNK_FN_ARG_TYS = [str, int, float, Value]
+ThunkFnArg = Union[Value, Prim]
+
+GG_THUNK_ARG_TYS = [str, int, float, Value, "Thunk"]
+ThunkArg = Union[Term, Prim]
+
+
+def arg_decode(gg: "GG", data: str, ex_type: type) -> ThunkFnArg:
+    if ex_type in GG_PRIM_TYS:
+        return ex_type(data)
+    elif ex_type == Value:
+        return Value(gg, data, None, None, True)
+    else:
+        raise ValueError(
+            f"prim_dec: Unacceptable type {ex_type}. Acceptable types: {GG_THUNK_ARG_TYS}"
+        )
 
 
 class Thunk:
-    f: Callable
-    args: List  # TODO: articulate
+    f: Callable[..., Term]
+    args: List[Term]
     executable: bool
 
-    def __init__(self, f: Callable, args: List, dec_from_str: bool, gg: "GG"):
+    @classmethod
+    def from_pgm_args(cls, gg: "GG", f: Callable[..., Term], str_args: List[str]):
+        tys = f.__annotations__
+        fargs = inspect.getfullargspec(f).args
+        args = []
+        for farg, str_arg in zip(fargs[1:], str_args):
+            ex_type = tys[farg]
+            args.append(arg_decode(gg, str_arg, ex_type))
+        return cls(f, args, gg)
+
+    def __init__(self, f: Callable[..., Term], args: Sequence[ThunkArg], gg: "GG"):
         self.f = f  # type: ignore
         self.args = []
         self.executable = True
@@ -153,12 +170,7 @@ class Thunk:
             raise e(f"The number of arguments is incorrect")
         for farg, arg in zip(fargs[1:], args):
             ex_type = tys[farg]
-            if dec_from_str and type(arg) in GG_PRIM_TYS:
-                if ex_type == Value and isinstance(arg, str):
-                    arg = Value(gg, arg, None, None, True)
-                else:
-                    arg = prim_dec(arg, ex_type)
-            if type(arg) != ex_type:
+            if not isinstance(arg, ex_type):
                 if isinstance(arg, Thunk) and ex_type == Value:
                     self.executable = False
                 else:
@@ -170,14 +182,6 @@ class Thunk:
     def exec(self, gg: "GG") -> Term:
         assert self.executable
         return self.f(gg, *self.args)
-
-    def force(self, gg: "GG") -> Value:
-        args = []
-        for a in self.args:
-            while isinstance(a, Thunk):
-                a = a.force(gg)
-            args.append(a)
-        return self.f(gg, *args)
 
     def __repr__(self):
         return f"Thunk {pprint.pformat(self.__dict__)}"
@@ -194,14 +198,6 @@ def prim_enc(prim: Prim) -> str:
             f"prim_end: Unacceptable type {t}. Acceptable types: {GG_PRIM_TYS}"
         )
     return str(prim)
-
-
-def prim_dec(data: str, ex_type: type) -> Prim:
-    if ex_type not in GG_PRIM_TYS:
-        raise ValueError(
-            f"prim_dec: Unacceptable type {ex_type}. Acceptable types: {GG_PRIM_TYS}"
-        )
-    return ex_type(data)
 
 
 class GG:
@@ -232,8 +228,8 @@ class GG:
     def file_value(self, path: str, saved: bool = False) -> Value:
         return Value(self, path, None, None, saved)
 
-    def thunk(self, f: Callable, args: List) -> "Thunk":
-        return Thunk(f, args, False, self)
+    def thunk(self, f: Callable[..., Term], args: List) -> "Thunk":
+        return Thunk(f, args, self)
 
     def save(self, term: Term, dest_path: Optional[str] = None) -> Hash:
         def e(msg: str):
@@ -313,7 +309,7 @@ class GG:
         exec_args = it.chain.from_iterable(["--executable", v] for v in executables)
         env_args = ["--envar", "PYTHONDONTWRITEBYTECODE=1"]
         loc_args = self._thunk_location_args(dest_path)
-        args = list(
+        cmd_args = list(
             it.chain(
                 [unwrap(self.gg_create_thunk_bin.path())],
                 value_args,
@@ -326,10 +322,10 @@ class GG:
                 cmd,
             )
         )
-        result = sub.run(args, stderr=sub.PIPE, stdout=sub.PIPE,)
+        result = sub.run(cmd_args, stderr=sub.PIPE, stdout=sub.PIPE,)
         if result.returncode != 0:
             print(
-                f"Non-zero return {result.returncode} for command:\n\t{' '.join(args)}"
+                f"Non-zero return {result.returncode} for command:\n\t{' '.join(cmd_args)}"
             )
             print("STDOUT:", result.stdout.decode(), file=sys.stderr, sep="\n")
             print("STDERR:", result.stderr.decode(), file=sys.stdout, sep="\n")
@@ -422,7 +418,7 @@ class GGCoordinator(GG):
 
 
 class GGState(NamedTuple):
-    thunk_functions: Dict[str, Callable]
+    thunk_functions: Dict[str, Callable[..., Term]]
 
 
 GG_STATE = GGState({})
@@ -476,7 +472,7 @@ def gg_root(args: List[str]):
     if args[0] not in GG_STATE.thunk_functions:
         raise e(f"`{args[0]}` is not a known thunk")
     f = GG_STATE.thunk_functions[args[0]]
-    t = Thunk(f, args[1:], True, gg)
+    t = Thunk.from_pgm_args(gg, f, args[1:])
     gg.save(t, "out")
 
 
@@ -493,7 +489,7 @@ def gg_exec(args: List[str]):
     if t_name not in GG_STATE.thunk_functions:
         raise e(f"`{t_name}` is not a known thunk")
     f = GG_STATE.thunk_functions[t_name]
-    t = Thunk(f, args[3:], True, gg)
+    t = Thunk.from_pgm_args(gg, f, args[3:])
     result = t.exec(gg)
     gg.save(result, "out")
     for path in gg.unused_outputs():
