@@ -11,7 +11,6 @@ using namespace std;
 
 string base64::encode( const string & input )
 {
-  SHA256 hash_function;
   string ret;
 
   /* Each stage of the Crypto++ pipeline will delete the pointer it owns
@@ -25,7 +24,6 @@ string base64::encode( const string & input )
 
 string base64::decode( const string & input )
 {
-  SHA256 hash_function;
   string ret;
 
   /* Each stage of the Crypto++ pipeline will delete the pointer it owns
