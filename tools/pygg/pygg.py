@@ -29,6 +29,7 @@ MAX_FANOUT = 10
 Hash = str
 
 script_path = os.path.realpath(sys.argv[0])
+lib_path = os.path.realpath(__file__)
 
 T = TypeVar("T")
 
@@ -203,11 +204,13 @@ def prim_dec(data: str, ex_type: type) -> Prim:
 
 
 class GG:
+    lib: Value
     script: Value
     gg_hash_bin: Value
     gg_create_thunk_bin: Value
 
-    def __init__(self, script: Value, gg_create_thunk_bin: Value, gg_hash_bin: Value):
+    def __init__(self, lib: Value, script: Value, gg_create_thunk_bin: Value, gg_hash_bin: Value):
+        self.lib = lib
         self.script = script
         self.gg_create_thunk_bin = gg_create_thunk_bin
         self.gg_hash_bin = gg_hash_bin
@@ -261,25 +264,27 @@ class GG:
         f = t.f
         name = f.__name__
         args = t.args
-        script_hash = self.hash_file(script_path)
 
         def e(msg: str):
             raise ValueError(f"save_thunk: `{name}`: {msg}")
 
         cmd = [
             os.path.basename(script_path),
+            gg_arg_placeholder(self.lib.hash()),
             "exec",
             gg_arg_placeholder(self.gg_create_thunk_bin.hash()),
             gg_arg_placeholder(self.gg_hash_bin.hash()),
             name,
         ]
         executables = [
-            script_hash,
+            self.script.hash(),
             self.gg_create_thunk_bin.hash(),
             self.gg_hash_bin.hash(),
         ]
         thunks = []
-        values = []
+        values = [
+                self.lib.hash(),
+                ]
         fparams = inspect.getfullargspec(f).args
         if len(args) + 1 != len(fparams):
             raise e("The number of formal and actual params are not equal")
@@ -303,6 +308,7 @@ class GG:
         thunk_args = it.chain.from_iterable(["--thunk", v] for v in thunks)
         output_args = it.chain.from_iterable(["--output", v] for v in outputs)
         exec_args = it.chain.from_iterable(["--executable", v] for v in executables)
+        env_args = ["--envar", "PYTHONDONTWRITEBYTECODE=1"]
         loc_args = self._thunk_location_args(dest_path)
         args = list(
             it.chain(
@@ -312,7 +318,8 @@ class GG:
                 output_args,
                 exec_args,
                 loc_args,
-                ["--", script_hash],
+                env_args,
+                ["--", self.script.hash()],
                 cmd,
             )
         )
@@ -333,9 +340,10 @@ class GGWorker(GG):
 
     def __init__(self, gg_create_thunk_bin: str, gg_hash_bin: str):
         script = Value(self, script_path, None, None, True)
+        lib = Value(self, lib_path, None, None, True)
         a = Value(self, gg_create_thunk_bin, None, None, True)
         b = Value(self, gg_hash_bin, None, None, True)
-        super().__init__(script, a, b)
+        super().__init__(lib, script, a, b)
         self.nextOutput = 0
         self.nOuputs = MAX_FANOUT
 
@@ -371,13 +379,15 @@ class GGWorker(GG):
 class GGCoordinator(GG):
     def __init__(self):
         script = Value(self, script_path, None, None, True)
+        lib = Value(self, lib_path, None, None, True)
         a = Value(self, which("gg-create-thunk-static"), None, None, True)
         b = Value(self, which("gg-hash-static"), None, None, True)
         self.init()
         self.collect(script.path())
+        self.collect(lib.path())
         self.collect(a.path())
         self.collect(b.path())
-        super().__init__(script, a, b)
+        super().__init__(lib, script, a, b)
 
     def collect(self, path: str) -> Hash:
         return sub.check_output([which("gg-collect"), path]).decode().strip()
@@ -487,7 +497,7 @@ def gg_exec(args: List[str]):
         pathlib.Path(path).touch(exist_ok = False)
 
 
-def gg_main():
+def main():
     def e(msg: str):
         raise ValueError(f"pygg: {msg}")
 
@@ -499,33 +509,3 @@ def gg_main():
         gg_exec(sys.argv[2:])
     else:
         raise e(f"The first argument must be (init|run), not {sys.argv[1]}")
-
-
-@thunk_fn
-def fib(gg: GG, n: int) -> Term:
-    if n < 2:
-        return gg.str_value(str(n))
-    else:
-        a = gg.thunk(fib, [n - 1])
-        b = gg.thunk(fib, [n - 2])
-        return gg.thunk(add_str, [a, b])
-
-
-@thunk_fn
-def add_str(gg: GG, a: Value, b: Value) -> Term:
-    ai = int(a.as_str())
-    bi = int(b.as_str())
-    return gg.str_value(str(ai + bi))
-
-@thunk_fn
-def trib(gg: GG, n: int) -> Term:
-    print(os.environ['PYTHONPATH'])
-    if n < 3:
-        return gg.str_value(str(n))
-    else:
-        a = gg.thunk(trib, [n - 1])
-        b = gg.thunk(trib, [n - 2])
-        c = gg.thunk(trib, [n - 3])
-        return gg.thunk(add_str, [gg.thunk(add_str, [a, b]), c])
-
-gg_main()
