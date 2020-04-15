@@ -221,6 +221,7 @@ int Thunk::execute() const
     "__GG_THUNK_HASH__=" + hash(),
     "__GG_DIR__=" + gg::paths::blobs().string(),
     "__GG_ENABLED__=1",
+    string("PATH=") + getenv("PATH"),
   } );
 
   if ( verbose ) {
