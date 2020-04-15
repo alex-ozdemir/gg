@@ -282,6 +282,7 @@ void ExecutionGraph::_create_dependency( const ComputationId from,
 {
   Computation & parent = computations_.at( from );
   Computation & child = computations_.at( on );
+  _update( on );
   if ( not child.up_to_date ) {
     throw runtime_error( "cannot depend on out-of-date computations" );
   }
