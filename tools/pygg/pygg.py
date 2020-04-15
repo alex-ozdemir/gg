@@ -279,16 +279,16 @@ class GG:
     script: Value
     bins: Dict[str, Value]
 
-    def __init__(
-            self, lib: Value, script: Value, bins: Dict[str, Value]
-    ):
+    def __init__(self, lib: Value, script: Value, bins: Dict[str, Value]):
         self.lib = lib
         self.script = script
         self.bins = bins
 
     def hash_file(self, path: str) -> Hash:
         return (
-            sub.check_output([unwrap(self.bin("gg-hash-static").path()), path]).decode().strip()
+            sub.check_output([unwrap(self.bin("gg-hash-static").path()), path])
+            .decode()
+            .strip()
         )
 
     def str_value(self, string: str) -> Value:
@@ -367,9 +367,7 @@ class GG:
             "exec",
             name,
         ] + list(map(hash_deref, bin_hashes))
-        executables = [
-            self.script.hash(),
-        ] + bin_hashes
+        executables = [self.script.hash(),] + bin_hashes
         thunks = []
         values = [
             self.lib.hash(),
@@ -433,7 +431,7 @@ class GGWorker(GG):
     nextOutput: int
     nOuputs: int
 
-    def __init__(self, bins: List[Tuple[str,str]]) -> None:
+    def __init__(self, bins: List[Tuple[str, str]]) -> None:
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
         bdict = {bin_: Value(self, path, None, None, True) for bin_, path in bins}
@@ -470,7 +468,6 @@ class GGWorker(GG):
 
 
 class GGCoordinator(GG):
-
     def __init__(self, bins: List[str]) -> None:
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
@@ -520,6 +517,7 @@ class GGState(NamedTuple):
 GG_STATE = GGState(thunk_functions={}, bins=[])
 
 REQUIRED_BINS = ["gg-create-thunk-static", "gg-hash-static"]
+
 
 def thunk_fn(
     outputs: Optional[Callable[..., List[str]]] = None, bins: List[str] = []
@@ -594,9 +592,7 @@ def gg_exec(args: List[str]) -> None:
         raise ValueError(f"gg_exec: {msg}")
 
     if len(args) < 1:
-        e(
-            "There must >= 1 argument (the thunk name)"
-        )
+        e("There must >= 1 argument (the thunk name)")
     t_name = args[0]
     args = args[1:]
     if t_name not in GG_STATE.thunk_functions:
@@ -605,10 +601,10 @@ def gg_exec(args: List[str]) -> None:
     bins = GG_STATE.bins
     if len(args) < len(bins):
         e(
-                f"There must be an argument for each required binary:\n\tArgs: {args}\n\tBins: {bins}\n"
+            f"There must be an argument for each required binary:\n\tArgs: {args}\n\tBins: {bins}\n"
         )
-    gg = GGWorker(list(zip(bins,args[:len(bins)])))
-    args = args[len(bins):]
+    gg = GGWorker(list(zip(bins, args[: len(bins)])))
+    args = args[len(bins) :]
     t = Thunk.from_pgm_args(gg, f, args)
     result = t.exec(gg)
     gg._save_output(result, "out")
