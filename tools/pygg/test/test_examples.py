@@ -8,7 +8,11 @@ import shutil as sh
 
 
 class ExampleTest(TestCase):
-    def run_examples(self, remote: bool = False) -> None:
+    @skipIf(not pathlib.Path("examples").exists(), "Missing examples dir")
+    def test_examples(self) -> None:
+        remote = "REMOTE_TEST" in os.environ
+        if remote:
+            self.assertIn("AWS_SECRET_ACCESS_KEY", os.environ)
         for p in pathlib.Path("examples").iterdir():
             if p.suffix == ".py":
                 print(f"Testing: {p.name}")
@@ -43,9 +47,3 @@ class ExampleTest(TestCase):
                     with open(f"{d}/out") as f:
                         self.assertEqual(f.read().strip(), result)
 
-    @skipIf(not pathlib.Path("examples").exists(), "Missing examples dir")
-    def test_examples(self) -> None:
-        remote = "REMOTE_TEST" in os.environ
-        if remote:
-            self.assertIn("AWS_SECRET_ACCESS_KEY", os.environ)
-        self.run_examples(remote)
