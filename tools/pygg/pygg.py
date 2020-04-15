@@ -11,6 +11,7 @@ from typing import (
     BinaryIO,
     TypeVar,
     Sequence,
+    NoReturn,
 )
 import subprocess as sub
 import shutil as sh
@@ -40,8 +41,7 @@ def unwrap(t: Optional[T]) -> T:
         raise ValueError("Unwrapped empty Optional")
     return t
 
-
-def unreachable():
+def unreachable() -> NoReturn:
     raise Exception("This location should be unreachable")
 
 
@@ -67,7 +67,7 @@ def gg_hash(data: bytes, tag: str) -> Hash:
 class Value:
     _gg: "GG"
     _path: Optional[str]
-    _hash: Optional[str]
+    _hash: Optional[Hash]
     _bytes: Optional[bytes]
     saved: bool
 
@@ -110,52 +110,98 @@ class Value:
         return self._hash
 
 
-GG_TERM_TYS = ["Thunk", Value]
-Term = Union["Thunk", Value]
-
-GG_PRIM_TYS = [str, int, float]
 Prim = Union[str, int, float]
+GG_PRIM_TYS = [str, int, float]
 
-GG_THUNK_FN_ARG_TYS = [str, int, float, Value]
-ThunkFnArg = Union[Value, Prim]
+FormalArg = Union[Prim, Value]
+FORMAL_ARG_TYS = [str, int, float, Value]
 
-GG_THUNK_ARG_TYS = [str, int, float, Value, "Thunk"]
-ThunkArg = Union[Term, Prim]
+ActualArg = Union[Prim, Value, "Thunk"]
+ACTUAL_ARG_TYS = [str, int, float, Value, "Thunk", "ThunkOutput"]
+
+Output = Union[Value, "Thunk"]
+MultiOutput = Union[Value, "Thunk", Dict[str, Union["Thunk", Value]]]
 
 
-def arg_decode(gg: "GG", data: str, ex_type: type) -> ThunkFnArg:
+class ThunkFn(NamedTuple):
+    f: Callable[..., MultiOutput]
+    output_profile: Optional[Callable[..., List[str]]]
+
+    def sig(self) -> inspect.FullArgSpec:
+        return inspect.getfullargspec(self.f)
+
+    def named_outputs(self, gg: "GG", args: List[ActualArg]) -> Optional[List[str]]:
+        if self.output_profile is not None:
+            op = self.output_profile(gg, *args)
+            if len(op) == 0:
+                raise ValueError(
+                    f"The output profile {self.output_profile.__name__} returned an empty list. Thunks must have at least one output.\nReturn:\n\t{op}"
+                )
+            return op
+        return None
+
+    def _check(self) -> None:
+        def ty_sig(s: inspect.FullArgSpec) -> List[type]:
+            return [s.annotations[fa] for fa in s.args]
+        """ Check signature agreement """
+        def e(m: str) -> NoReturn:
+            raise ValueError(f"ThunkFn consistency: {m}")
+        f_sig = ty_sig(self.sig())
+        if self.output_profile is None:
+            return
+        o_sig = inspect.getfullargspec(self.output_profile)
+        o_args = ty_sig(o_sig)
+        if f_sig != o_args:
+            e(
+                f"The functions {self.f.__name__} and {self.output_profile.__name__} should take the same arguments, since the latter is an output profile function for the former, but\n\t{f_sig}\nis not equal to\n\t{o_args}\n"
+            )
+        if (
+            "return" not in o_sig.annotations
+            or o_sig.annotations["return"] != List[str]
+        ):
+            e(
+                f"The output profile, {self.output_profile.__name__} must return a List[str]"
+            )
+
+
+def arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
+    """ Interprets the thunk argument `arg` as `ex_type`.
+    For primitives, this is just a parse.
+    For a value, this interprets `arg` as a path """
     if ex_type in GG_PRIM_TYS:
-        return ex_type(data)
+        return ex_type(arg)
     elif ex_type == Value:
-        return Value(gg, data, None, None, True)
+        return Value(gg, arg, None, None, True)
     else:
         raise ValueError(
-            f"prim_dec: Unacceptable type {ex_type}. Acceptable types: {GG_THUNK_ARG_TYS}"
+            f"prim_dec: Unacceptable type {ex_type}. Acceptable types: {FORMAL_ARG_TYS}"
         )
 
 
 class Thunk:
-    f: Callable[..., Term]
-    args: List[Term]
+    gg: "GG"
+    f: ThunkFn
+    args: List[ActualArg]
     executable: bool
 
     @classmethod
-    def from_pgm_args(cls, gg: "GG", f: Callable[..., Term], str_args: List[str]):
-        tys = f.__annotations__
-        fargs = inspect.getfullargspec(f).args
+    def from_pgm_args(cls, gg: "GG", f: ThunkFn, str_args: List[str]) -> "Thunk":
+        tys = f.f.__annotations__
+        fargs = f.sig().args
         args = []
         for farg, str_arg in zip(fargs[1:], str_args):
             ex_type = tys[farg]
             args.append(arg_decode(gg, str_arg, ex_type))
         return cls(f, args, gg)
 
-    def __init__(self, f: Callable[..., Term], args: Sequence[ThunkArg], gg: "GG"):
+    def __init__(self, f: ThunkFn, args: Sequence[ActualArg], gg: "GG"):
         self.f = f  # type: ignore
         self.args = []
         self.executable = True
-        n = f.__name__
+        self.gg = gg
+        n = f.f.__name__
 
-        def e(msg: str, note: Optional[str] = None):
+        def e(msg: str, note: Optional[str] = None) -> NoReturn:
             inv = f"{n}({', '.join(str(a) for a in args)})"
             m = f"Since\n\t{msg}\n, the thunk invocation\n\t{inv}\nis invalid\n"
             if note is not None:
@@ -163,32 +209,56 @@ class Thunk:
             raise ValueError(m)
 
         if n not in GG_STATE.thunk_functions:
-            raise e(f"{n} is not a registered thunk function")
-        fargs = inspect.getfullargspec(f).args
-        tys = f.__annotations__
+            e(f"{n} is not a registered thunk function")
+        if not isinstance(args, list):
+            e(f"{args} is not a list")
+        fargs = f.sig().args
+        tys = f.f.__annotations__
         if len(fargs) != 1 + len(args):
-            raise e(f"The number of arguments is incorrect")
+            e(f"The number of arguments is incorrect")
         for farg, arg in zip(fargs[1:], args):
             ex_type = tys[farg]
             if not isinstance(arg, ex_type):
-                if isinstance(arg, Thunk) and ex_type == Value:
+                if (
+                    isinstance(arg, Thunk) or isinstance(arg, ThunkOutput)
+                ) and ex_type == Value:
                     self.executable = False
                 else:
-                    raise e(
+                    e(
                         f"The actual argument {arg} should have type {tys[farg]} but has type {type(arg)}"
                     )
             self.args.append(arg)
 
-    def exec(self, gg: "GG") -> Term:
+    def exec(self, gg: "GG") -> MultiOutput:
         assert self.executable
-        return self.f(gg, *self.args)
+        return self.f.f(gg, *self.args)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Thunk {pprint.pformat(self.__dict__)}"
 
+    def default_output(self) -> "ThunkOutput":
+        return ThunkOutput(thunk=self, filename=None)
 
-def gg_arg_placeholder(h: Hash) -> str:
+    def __getitem__(self, filename: str) -> "ThunkOutput":
+        op = self.f.named_outputs(self.gg, self.args)
+        if op is not None and op[0] == filename:
+            return ThunkOutput(thunk=self, filename=None)
+        else:
+            return ThunkOutput(thunk=self, filename=filename)
+
+
+class ThunkOutput(NamedTuple):
+    thunk: Thunk
+    # If there is no filename, this is the default output
+    filename: Optional[str]
+
+
+def hash_deref(h: Hash) -> str:
     return "@{GGHASH:%s}" % h
+
+
+def hash_tag(h: Hash, filename: Optional[str]) -> str:
+    return h if filename is None else f"{h}#{filename}"
 
 
 def prim_enc(prim: Prim) -> str:
@@ -228,11 +298,20 @@ class GG:
     def file_value(self, path: str, saved: bool = False) -> Value:
         return Value(self, path, None, None, saved)
 
-    def thunk(self, f: Callable[..., Term], args: List) -> "Thunk":
+    def thunk(self, f: ThunkFn, args: List[ActualArg]) -> Thunk:
         return Thunk(f, args, self)
 
-    def save(self, term: Term, dest_path: Optional[str] = None) -> Hash:
-        def e(msg: str):
+    def _save_output(self, output: MultiOutput, dest_path: Optional[str] = None) -> None:
+        if isinstance(output, dict):
+            for name, t in output.items():
+                if not isinstance(name, str):
+                    raise ValueError(f"The key {name} of {output} is not a string")
+                self._save(t, name)
+        else:
+            self._save(output, dest_path)
+
+    def _save(self, term: ActualArg, dest_path: Optional[str] = None) -> Hash:
+        def e(msg: str) -> NoReturn:
             raise ValueError(f"save: {msg}")
 
         if isinstance(term, Value):
@@ -247,8 +326,10 @@ class GG:
             return ret
         elif isinstance(term, Thunk):
             return self.save_thunk(term, dest_path)
+        elif isinstance(term, ThunkOutput):
+            return hash_tag(self.save_thunk(term.thunk, dest_path), term.filename)
         else:
-            raise e(f"Unknown type {type(term)}")
+            e(f"Unknown type {type(term)}")
 
     def _save_bytes(self, data: bytes, dest_path: Optional[str]) -> Hash:
         raise Exception("NYI")
@@ -260,19 +341,17 @@ class GG:
         raise Exception("NYI")
 
     def save_thunk(self, t: Thunk, dest_path: Optional[str]) -> Hash:
-        f = t.f
-        name = f.__name__
-        args = t.args
+        name = t.f.f.__name__
 
-        def e(msg: str):
+        def e(msg: str) -> NoReturn:
             raise ValueError(f"save_thunk: `{name}`: {msg}")
 
         cmd = [
             os.path.basename(script_path),
-            gg_arg_placeholder(self.lib.hash()),
+            hash_deref(self.lib.hash()),
             "exec",
-            gg_arg_placeholder(self.gg_create_thunk_bin.hash()),
-            gg_arg_placeholder(self.gg_hash_bin.hash()),
+            hash_deref(self.gg_create_thunk_bin.hash()),
+            hash_deref(self.gg_hash_bin.hash()),
             name,
         ]
         executables = [
@@ -284,25 +363,31 @@ class GG:
         values = [
             self.lib.hash(),
         ]
-        fparams = inspect.getfullargspec(f).args
-        if len(args) + 1 != len(fparams):
-            raise e("The number of formal and actual params are not equal")
-        for fp, ap in zip(fparams[1:], args):
-            ex_type = f.__annotations__[fp]
+        fparams = t.f.sig().args
+        if len(t.args) + 1 != len(fparams):
+            e("The number of formal and actual params are not equal")
+        for fp, ap in zip(fparams[1:], t.args):
+            ex_type = t.f.f.__annotations__[fp]
             if ex_type in GG_PRIM_TYS:
                 cmd.append(prim_enc(ap))  # type: ignore
             elif ex_type == Value:
-                h = self.save(ap)
-                cmd.append(gg_arg_placeholder(h))
+                h = self._save(ap)
+                cmd.append(hash_deref(h))
                 if isinstance(ap, Value):
                     values.append(h)
-                elif isinstance(ap, Thunk):
+                elif isinstance(ap, Thunk) or isinstance(ap, ThunkOutput):
                     thunks.append(h)
                 else:
                     unreachable()
             else:
                 unreachable()
-        outputs = ["out"] + list(f"{i:03d}" for i in range(MAX_FANOUT))
+        outputs = []
+        op = t.f.named_outputs(self, t.args)
+        if op is None:
+            outputs.append("out")
+        else:
+            outputs.extend(op)
+        outputs += list(f"{i:03d}" for i in range(MAX_FANOUT))
         value_args = it.chain.from_iterable(["--value", v] for v in values)
         thunk_args = it.chain.from_iterable(["--thunk", v] for v in thunks)
         output_args = it.chain.from_iterable(["--output", v] for v in outputs)
@@ -375,22 +460,22 @@ class GGWorker(GG):
 
 
 class GGCoordinator(GG):
-    def __init__(self):
+    def __init__(self) -> None:
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
         a = Value(self, which("gg-create-thunk-static"), None, None, True)
         b = Value(self, which("gg-hash-static"), None, None, True)
         self.init()
-        self.collect(script.path())
-        self.collect(lib.path())
-        self.collect(a.path())
-        self.collect(b.path())
+        self.collect(unwrap(script.path()))
+        self.collect(unwrap(lib.path()))
+        self.collect(unwrap(a.path()))
+        self.collect(unwrap(b.path()))
         super().__init__(lib, script, a, b)
 
     def collect(self, path: str) -> Hash:
         return sub.check_output([which("gg-collect"), path]).decode().strip()
 
-    def init(self):
+    def init(self) -> None:
         sub.check_call(["rm -rf .gg",], shell=True)
         sub.check_call([which("gg-init")])
 
@@ -418,93 +503,102 @@ class GGCoordinator(GG):
 
 
 class GGState(NamedTuple):
-    thunk_functions: Dict[str, Callable[..., Term]]
+    thunk_functions: Dict[str, ThunkFn]
 
 
 GG_STATE = GGState({})
 
 
-def thunk_fn(func):
-    def e(msg: str, note: Optional[str] = None):
-        m = f"In function `{func.__name__}`,\n\t{msg}\n, so `{func.__name__}` cannot be a thunk."
-        if note is not None:
-            m += f"\n\nNote: {note}"
-        raise ValueError(m)
+def thunk_fn(output_profile: Optional[Callable[..., List[str]]] = None) -> Callable[[Callable],ThunkFn]:
+    def decorator_thunk_fn(func: Callable) -> ThunkFn:
+        def e(msg: str, note: Optional[str] = None) -> NoReturn:
+            m = f"In function `{func.__name__}`,\n\t{msg}\n, so `{func.__name__}` cannot be a thunk."
+            if note is not None:
+                m += f"\n\nNote: {note}"
+            raise ValueError(m)
 
-    if "return" not in func.__annotations__:
-        raise e("there is no annotated return")
-    ret = func.__annotations__["return"]
-    if ret not in [Term, Value, Thunk]:  # type: ignore
-        raise e("the return is not annotated as a value or thunk")
-    argspec = inspect.getfullargspec(func)
-    if argspec.varargs is not None:
-        raise e("there are varargs")
-    if argspec.varkw is not None:
-        raise e("there are keyword args")
-    if argspec.defaults is not None:
-        raise e("there are default arg values")
-    params = argspec.args
-    if func.__annotations__[params[0]] != GG:
-        raise e("the first argument is not a GG")
+        if "return" not in func.__annotations__:
+            e("there is no annotated return")
+        ret = func.__annotations__["return"]
+        if ret not in [MultiOutput, Output, Value, Thunk]:  # type: ignore
+            e("the return is not annotated as a value or thunk")
+        if ret == MultiOutput and output_profile is None:  # type: ignore
+            e("the return is a MultiOutput, but there is no output_profile")
+        tf = ThunkFn(f=func, output_profile=output_profile)
+        argspec = tf.sig()
+        if argspec.varargs is not None:
+            e("there are varargs")
+        if argspec.varkw is not None:
+            e("there are keyword args")
+        if argspec.defaults is not None:
+            e("there are default arg values")
+        params = argspec.args
+        if func.__annotations__[params[0]] != GG:
+            e("the first argument is not a GG")
 
-    for p in params[1:]:
-        if p not in func.__annotations__:
-            raise e(f"the parameter `{p}` is not annotated")
-        if func.__annotations__[p] not in [str, Value, int, float]:
-            raise e(
-                f"the parameter `{p}` has unacceptable type",
-                "the acceptable types are: [str, Value, int, float]",
-            )
-    name = func.__name__
-    assert name not in GG_STATE.thunk_functions
-    GG_STATE.thunk_functions[name] = func
-    return func
+        for p in params[1:]:
+            if p not in func.__annotations__:
+                e(f"the parameter `{p}` is not annotated")
+            if func.__annotations__[p] not in [str, Value, int, float]:
+                e(
+                    f"the parameter `{p}` has unacceptable type",
+                    "the acceptable types are: [str, Value, int, float]",
+                )
+        name = func.__name__
+        assert name not in GG_STATE.thunk_functions
+        GG_STATE.thunk_functions[name] = tf
+        tf._check()
+        return tf
+
+    return decorator_thunk_fn
 
 
-def gg_root(args: List[str]):
+def gg_root(args: List[str]) -> None:
     gg = GGCoordinator()
 
-    def e(msg: str):
+    def e(msg: str) -> NoReturn:
         raise ValueError(f"gg_root: {msg}")
 
     if len(args) == 0:
-        raise e("Must include the thunk name")
+        e("Must include the thunk name")
     if args[0] not in GG_STATE.thunk_functions:
-        raise e(f"`{args[0]}` is not a known thunk")
+        e(f"`{args[0]}` is not a known thunk")
     f = GG_STATE.thunk_functions[args[0]]
     t = Thunk.from_pgm_args(gg, f, args[1:])
-    gg.save(t, "out")
+    gg._save_output(t, "out")
 
 
-def gg_exec(args: List[str]):
-    def e(msg: str):
+def gg_exec(args: List[str]) -> None:
+    def e(msg: str) -> NoReturn:
         raise ValueError(f"gg_exec: {msg}")
 
     if len(args) < 3:
-        raise e(
+        e(
             "There must be at least 3 argumets (gg-create-thunk, gg-hash, and the thunk name"
         )
     gg = GGWorker(args[0], args[1])
     t_name = args[2]
     if t_name not in GG_STATE.thunk_functions:
-        raise e(f"`{t_name}` is not a known thunk")
+        e(f"`{t_name}` is not a known thunk")
     f = GG_STATE.thunk_functions[t_name]
     t = Thunk.from_pgm_args(gg, f, args[3:])
     result = t.exec(gg)
-    gg.save(result, "out")
+    gg._save_output(result, "out")
     for path in gg.unused_outputs():
         pathlib.Path(path).touch(exist_ok=False)
 
 
-def main():
-    def e(msg: str):
+def main() -> None:
+    def e(msg: str) -> NoReturn:
         raise ValueError(f"pygg: {msg}")
 
+    if not os.access(sys.argv[0], os.X_OK):
+        e(f"The script {sys.argv[0]} is not executable. It must be.")
     if len(sys.argv) < 2:
-        raise e("There must be at least one argument: (init or run)")
+        e("There must be at least one argument: (init or run)")
     if sys.argv[1] == "init":
         gg_root(sys.argv[2:])
     elif sys.argv[1] == "exec":
         gg_exec(sys.argv[2:])
     else:
-        raise e(f"The first argument must be (init|run), not {sys.argv[1]}")
+        e(f"The first argument must be (init|run), not {sys.argv[1]}")
