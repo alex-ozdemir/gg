@@ -1,4 +1,4 @@
-from unittest import TestCase
+from unittest import TestCase, skipIf
 import pathlib
 import re
 import tempfile
@@ -8,7 +8,7 @@ import shutil as sh
 
 
 class ExampleTest(TestCase):
-    def test_examples(self) -> None:
+    def run_examples(self, remote: bool = False) -> None:
         for p in pathlib.Path("examples").iterdir():
             if p.suffix == ".py":
                 print(f"Testing: {p.name}")
@@ -35,6 +35,17 @@ class ExampleTest(TestCase):
                         check=True,
                         args=[py, str(os.path.abspath(p)), "init"] + args,
                     )
-                    sub.run(cwd=d, check=True, args=[force, "out"])
+                    a = [force]
+                    if remote:
+                        a.extend(["--jobs", "1", "--engine", "lambda"])
+                    a.append("out")
+                    sub.run(cwd=d, check=True, args=a)
                     with open(f"{d}/out") as f:
                         self.assertEqual(f.read().strip(), result)
+
+    @skipIf(not pathlib.Path("examples").exists(), "Missing examples dir")
+    def test_examples(self) -> None:
+        remote = "REMOTE_TEST" in os.environ
+        if remote:
+            self.assertIn("AWS_SECRET_ACCESS_KEY", os.environ)
+        self.run_examples(remote)
