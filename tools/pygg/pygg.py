@@ -125,17 +125,17 @@ MultiOutput = Union[Value, "Thunk", Dict[str, Union["Thunk", Value]]]
 
 class ThunkFn(NamedTuple):
     f: Callable[..., MultiOutput]
-    output_profile: Optional[Callable[..., List[str]]]
+    outputs: Optional[Callable[..., List[str]]]
 
     def sig(self) -> inspect.FullArgSpec:
         return inspect.getfullargspec(self.f)
 
     def named_outputs(self, gg: "GG", args: List[ActualArg]) -> Optional[List[str]]:
-        if self.output_profile is not None:
-            op = self.output_profile(gg, *args)
+        if self.outputs is not None:
+            op = self.outputs(gg, *args)
             if len(op) == 0:
                 raise ValueError(
-                    f"The output profile {self.output_profile.__name__} returned an empty list. Thunks must have at least one output.\nReturn:\n\t{op}"
+                    f"The output profile {self.outputs.__name__} returned an empty list. Thunks must have at least one output.\nReturn:\n\t{op}"
                 )
             return op
         return None
@@ -147,20 +147,20 @@ class ThunkFn(NamedTuple):
         def e(m: str) -> NoReturn:
             raise ValueError(f"ThunkFn consistency: {m}")
         f_sig = ty_sig(self.sig())
-        if self.output_profile is None:
+        if self.outputs is None:
             return
-        o_sig = inspect.getfullargspec(self.output_profile)
+        o_sig = inspect.getfullargspec(self.outputs)
         o_args = ty_sig(o_sig)
         if f_sig != o_args:
             e(
-                f"The functions {self.f.__name__} and {self.output_profile.__name__} should take the same arguments, since the latter is an output profile function for the former, but\n\t{f_sig}\nis not equal to\n\t{o_args}\n"
+                f"The functions {self.f.__name__} and {self.outputs.__name__} should take the same arguments, since the latter is an output profile function for the former, but\n\t{f_sig}\nis not equal to\n\t{o_args}\n"
             )
         if (
             "return" not in o_sig.annotations
             or o_sig.annotations["return"] != List[str]
         ):
             e(
-                f"The output profile, {self.output_profile.__name__} must return a List[str]"
+                f"The output profile, {self.outputs.__name__} must return a List[str]"
             )
 
 
@@ -509,7 +509,7 @@ class GGState(NamedTuple):
 GG_STATE = GGState({})
 
 
-def thunk_fn(output_profile: Optional[Callable[..., List[str]]] = None) -> Callable[[Callable],ThunkFn]:
+def thunk_fn(outputs: Optional[Callable[..., List[str]]] = None) -> Callable[[Callable],ThunkFn]:
     def decorator_thunk_fn(func: Callable) -> ThunkFn:
         def e(msg: str, note: Optional[str] = None) -> NoReturn:
             m = f"In function `{func.__name__}`,\n\t{msg}\n, so `{func.__name__}` cannot be a thunk."
@@ -522,9 +522,9 @@ def thunk_fn(output_profile: Optional[Callable[..., List[str]]] = None) -> Calla
         ret = func.__annotations__["return"]
         if ret not in [MultiOutput, Output, Value, Thunk]:  # type: ignore
             e("the return is not annotated as a value or thunk")
-        if ret == MultiOutput and output_profile is None:  # type: ignore
-            e("the return is a MultiOutput, but there is no output_profile")
-        tf = ThunkFn(f=func, output_profile=output_profile)
+        if ret == MultiOutput and outputs is None:  # type: ignore
+            e("the return is a MultiOutput, but there is no outputs")
+        tf = ThunkFn(f=func, outputs=outputs)
         argspec = tf.sig()
         if argspec.varargs is not None:
             e("there are varargs")

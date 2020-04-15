@@ -32,10 +32,10 @@ def fib_(gg: pygg.GG, n: pygg.Value) -> pygg.Output:
         b = gg.thunk(fib_, [s["n2"]])
         return gg.thunk(add_str, [a, b])
 
-def split_output_profile(gg: pygg.GG, _n: pygg.Value) -> List[str]:
+def split_outputs(gg: pygg.GG, _n: pygg.Value) -> List[str]:
     return ["n1", "n2"]
 
-@pygg.thunk_fn(output_profile = split_output_profile)
+@pygg.thunk_fn(outputs = split_outputs)
 def split(gg: pygg.GG, n: pygg.Value) -> pygg.MultiOutput:
     i = int(n.as_str())
     return {
