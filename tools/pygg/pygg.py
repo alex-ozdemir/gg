@@ -12,6 +12,7 @@ from typing import (
     TypeVar,
     Sequence,
     NoReturn,
+    Tuple,
 )
 import subprocess as sub
 import shutil as sh
@@ -40,6 +41,7 @@ def unwrap(t: Optional[T]) -> T:
     if t is None:
         raise ValueError("Unwrapped empty Optional")
     return t
+
 
 def unreachable() -> NoReturn:
     raise Exception("This location should be unreachable")
@@ -126,6 +128,7 @@ MultiOutput = Union[Value, "Thunk", Dict[str, Union["Thunk", Value]]]
 class ThunkFn(NamedTuple):
     f: Callable[..., MultiOutput]
     outputs: Optional[Callable[..., List[str]]]
+    bins: List[str] = []
 
     def sig(self) -> inspect.FullArgSpec:
         return inspect.getfullargspec(self.f)
@@ -143,9 +146,12 @@ class ThunkFn(NamedTuple):
     def _check(self) -> None:
         def ty_sig(s: inspect.FullArgSpec) -> List[type]:
             return [s.annotations[fa] for fa in s.args]
+
         """ Check signature agreement """
+
         def e(m: str) -> NoReturn:
             raise ValueError(f"ThunkFn consistency: {m}")
+
         f_sig = ty_sig(self.sig())
         if self.outputs is None:
             return
@@ -159,9 +165,7 @@ class ThunkFn(NamedTuple):
             "return" not in o_sig.annotations
             or o_sig.annotations["return"] != List[str]
         ):
-            e(
-                f"The output profile, {self.outputs.__name__} must return a List[str]"
-            )
+            e(f"The output profile, {self.outputs.__name__} must return a List[str]")
 
 
 def arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
@@ -273,20 +277,18 @@ def prim_enc(prim: Prim) -> str:
 class GG:
     lib: Value
     script: Value
-    gg_hash_bin: Value
-    gg_create_thunk_bin: Value
+    bins: Dict[str, Value]
 
     def __init__(
-        self, lib: Value, script: Value, gg_create_thunk_bin: Value, gg_hash_bin: Value
+            self, lib: Value, script: Value, bins: Dict[str, Value]
     ):
         self.lib = lib
         self.script = script
-        self.gg_create_thunk_bin = gg_create_thunk_bin
-        self.gg_hash_bin = gg_hash_bin
+        self.bins = bins
 
     def hash_file(self, path: str) -> Hash:
         return (
-            sub.check_output([unwrap(self.gg_hash_bin.path()), path]).decode().strip()
+            sub.check_output([unwrap(self.bin("gg-hash-static").path()), path]).decode().strip()
         )
 
     def str_value(self, string: str) -> Value:
@@ -301,7 +303,9 @@ class GG:
     def thunk(self, f: ThunkFn, args: List[ActualArg]) -> Thunk:
         return Thunk(f, args, self)
 
-    def _save_output(self, output: MultiOutput, dest_path: Optional[str] = None) -> None:
+    def _save_output(
+        self, output: MultiOutput, dest_path: Optional[str] = None
+    ) -> None:
         if isinstance(output, dict):
             for name, t in output.items():
                 if not isinstance(name, str):
@@ -331,6 +335,11 @@ class GG:
         else:
             e(f"Unknown type {type(term)}")
 
+    def bin(self, name: str) -> Value:
+        if name not in self.bins:
+            raise ValueError(f"Unknown bin: {name}")
+        return self.bins[name]
+
     def _save_bytes(self, data: bytes, dest_path: Optional[str]) -> Hash:
         raise Exception("NYI")
 
@@ -346,19 +355,21 @@ class GG:
         def e(msg: str) -> NoReturn:
             raise ValueError(f"save_thunk: `{name}`: {msg}")
 
+        bin_hashes = []
+        for bin_name in GG_STATE.bins:
+            if bin_name not in self.bins:
+                e(f"The binary {bin_name} is unknown")
+            bin_hashes.append(self.bins[bin_name].hash())
+
         cmd = [
             os.path.basename(script_path),
             hash_deref(self.lib.hash()),
             "exec",
-            hash_deref(self.gg_create_thunk_bin.hash()),
-            hash_deref(self.gg_hash_bin.hash()),
             name,
-        ]
+        ] + list(map(hash_deref, bin_hashes))
         executables = [
             self.script.hash(),
-            self.gg_create_thunk_bin.hash(),
-            self.gg_hash_bin.hash(),
-        ]
+        ] + bin_hashes
         thunks = []
         values = [
             self.lib.hash(),
@@ -396,7 +407,7 @@ class GG:
         loc_args = self._thunk_location_args(dest_path)
         cmd_args = list(
             it.chain(
-                [unwrap(self.gg_create_thunk_bin.path())],
+                [unwrap(self.bin("gg-create-thunk-static").path())],
                 value_args,
                 thunk_args,
                 output_args,
@@ -422,12 +433,11 @@ class GGWorker(GG):
     nextOutput: int
     nOuputs: int
 
-    def __init__(self, gg_create_thunk_bin: str, gg_hash_bin: str):
+    def __init__(self, bins: List[Tuple[str,str]]) -> None:
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
-        a = Value(self, gg_create_thunk_bin, None, None, True)
-        b = Value(self, gg_hash_bin, None, None, True)
-        super().__init__(lib, script, a, b)
+        bdict = {bin_: Value(self, path, None, None, True) for bin_, path in bins}
+        super().__init__(lib, script, bdict)
         self.nextOutput = 0
         self.nOuputs = MAX_FANOUT
 
@@ -460,17 +470,17 @@ class GGWorker(GG):
 
 
 class GGCoordinator(GG):
-    def __init__(self) -> None:
+
+    def __init__(self, bins: List[str]) -> None:
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
-        a = Value(self, which("gg-create-thunk-static"), None, None, True)
-        b = Value(self, which("gg-hash-static"), None, None, True)
+        bdict = {bin_: Value(self, which(bin_), None, None, True) for bin_ in bins}
         self.init()
         self.collect(unwrap(script.path()))
         self.collect(unwrap(lib.path()))
-        self.collect(unwrap(a.path()))
-        self.collect(unwrap(b.path()))
-        super().__init__(lib, script, a, b)
+        for _, bin_value in bdict.items():
+            self.collect(unwrap(bin_value.path()))
+        super().__init__(lib, script, bdict)
 
     def collect(self, path: str) -> Hash:
         return sub.check_output([which("gg-collect"), path]).decode().strip()
@@ -504,12 +514,16 @@ class GGCoordinator(GG):
 
 class GGState(NamedTuple):
     thunk_functions: Dict[str, ThunkFn]
+    bins: List[str]
 
 
-GG_STATE = GGState({})
+GG_STATE = GGState(thunk_functions={}, bins=[])
 
+REQUIRED_BINS = ["gg-create-thunk-static", "gg-hash-static"]
 
-def thunk_fn(outputs: Optional[Callable[..., List[str]]] = None) -> Callable[[Callable],ThunkFn]:
+def thunk_fn(
+    outputs: Optional[Callable[..., List[str]]] = None, bins: List[str] = []
+) -> Callable[[Callable], ThunkFn]:
     def decorator_thunk_fn(func: Callable) -> ThunkFn:
         def e(msg: str, note: Optional[str] = None) -> NoReturn:
             m = f"In function `{func.__name__}`,\n\t{msg}\n, so `{func.__name__}` cannot be a thunk."
@@ -524,7 +538,9 @@ def thunk_fn(outputs: Optional[Callable[..., List[str]]] = None) -> Callable[[Ca
             e("the return is not annotated as a value or thunk")
         if ret == MultiOutput and outputs is None:  # type: ignore
             e("the return is a MultiOutput, but there is no outputs")
-        tf = ThunkFn(f=func, outputs=outputs)
+        for b in bins:
+            install(b)
+        tf = ThunkFn(f=func, outputs=outputs, bins=REQUIRED_BINS + bins)
         argspec = tf.sig()
         if argspec.varargs is not None:
             e("there are varargs")
@@ -553,8 +569,13 @@ def thunk_fn(outputs: Optional[Callable[..., List[str]]] = None) -> Callable[[Ca
     return decorator_thunk_fn
 
 
+def install(bin_: str) -> None:
+    if bin_ not in GG_STATE.bins:
+        GG_STATE.bins.append(bin_)
+
+
 def gg_root(args: List[str]) -> None:
-    gg = GGCoordinator()
+    gg = GGCoordinator(GG_STATE.bins)
 
     def e(msg: str) -> NoReturn:
         raise ValueError(f"gg_root: {msg}")
@@ -572,16 +593,23 @@ def gg_exec(args: List[str]) -> None:
     def e(msg: str) -> NoReturn:
         raise ValueError(f"gg_exec: {msg}")
 
-    if len(args) < 3:
+    if len(args) < 1:
         e(
-            "There must be at least 3 argumets (gg-create-thunk, gg-hash, and the thunk name"
+            "There must >= 1 argument (the thunk name)"
         )
-    gg = GGWorker(args[0], args[1])
-    t_name = args[2]
+    t_name = args[0]
+    args = args[1:]
     if t_name not in GG_STATE.thunk_functions:
         e(f"`{t_name}` is not a known thunk")
     f = GG_STATE.thunk_functions[t_name]
-    t = Thunk.from_pgm_args(gg, f, args[3:])
+    bins = GG_STATE.bins
+    if len(args) < len(bins):
+        e(
+                f"There must be an argument for each required binary:\n\tArgs: {args}\n\tBins: {bins}\n"
+        )
+    gg = GGWorker(list(zip(bins,args[:len(bins)])))
+    args = args[len(bins):]
+    t = Thunk.from_pgm_args(gg, f, args)
     result = t.exec(gg)
     gg._save_output(result, "out")
     for path in gg.unused_outputs():
@@ -594,6 +622,8 @@ def main() -> None:
 
     if not os.access(sys.argv[0], os.X_OK):
         e(f"The script {sys.argv[0]} is not executable. It must be.")
+    for b in REQUIRED_BINS:
+        install(b)
     if len(sys.argv) < 2:
         e("There must be at least one argument: (init or run)")
     if sys.argv[1] == "init":

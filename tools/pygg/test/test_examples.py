@@ -10,6 +10,7 @@ import shutil as sh
 class ExampleTest(TestCase):
     @skipIf(not pathlib.Path("examples").exists(), "Missing examples dir")
     def test_examples(self) -> None:
+        os.environ['PATH'] = f"{os.path.abspath('examples')}:{os.environ['PATH']}"
         remote = "REMOTE_TEST" in os.environ
         if remote:
             self.assertIn("AWS_SECRET_ACCESS_KEY", os.environ)
@@ -27,7 +28,6 @@ class ExampleTest(TestCase):
                 assert res is not None  # for mypy
                 self.assertIsNotNone(res)
                 result = res.group(1)
-                print(args, result)
 
                 with tempfile.TemporaryDirectory() as d:
                     py = sh.which("python3.7")
