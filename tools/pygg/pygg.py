@@ -323,7 +323,6 @@ class GG:
             raise ValueError(f"save: {msg}")
 
         if isinstance(term, Value):
-            print(term.__dict__)
             p = term.path()
             if term.saved:
                 return term.hash()
@@ -462,9 +461,7 @@ class GGWorker(GG):
     def _save_path(self, path: str, dest_path: Optional[str]) -> str:
         if dest_path is None:
             dest_path = self._next_output_file()
-        print("Before moving: ", os.listdir("."))
         sh.move(path, dest_path)
-        print("After: ", os.listdir("."))
         return dest_path
 
     def _thunk_location_args(self, dest_path: Optional[str]) -> List[str]:
