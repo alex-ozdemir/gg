@@ -27,7 +27,10 @@ import pathlib
 import tempfile
 import itertools as it
 
-MAX_FANOUT = 32
+MODULE_NAME = "pygg"
+MAX_FANOUT = 10
+IMPORT_WRAPPER_HASH_ENVVAR = "IMPORT_WRAPPER_HASH"
+SCRIPT_NAME_ENVVAR = "SCRIPT_NAME_ENVVAR"
 
 Hash = str
 
@@ -64,6 +67,19 @@ def gg_hash(data: bytes, tag: str) -> Hash:
         .rstrip("=")
     )
     return f"{tag}{h}{len(data):08x}"
+
+
+if SCRIPT_NAME_ENVVAR not in os.environ:
+    os.environ[SCRIPT_NAME_ENVVAR] = os.path.basename(script_path)
+
+if IMPORT_WRAPPER_HASH_ENVVAR in os.environ:
+    # In a worker
+    IMPORT_WRAPPER_HASH = os.environ[IMPORT_WRAPPER_HASH_ENVVAR]
+else:
+    # Local
+    import import_wrapper
+
+    IMPORT_WRAPPER_HASH = gg_hash(open(import_wrapper.__file__, "rb").read(), "V")
 
 
 class Value:
@@ -236,7 +252,8 @@ class Thunk:
 
     def exec(self, gg: "GG") -> MultiOutput:
         assert self.executable
-        return self.f.f(gg, *self.args)
+        r = self.f.f(gg, *self.args)
+        return r
 
     def __repr__(self) -> str:
         return f"Thunk {pprint.pformat(self.__dict__)}"
@@ -278,11 +295,15 @@ def prim_enc(prim: Prim) -> str:
 class GG:
     lib: Value
     script: Value
+    import_wrapper: Value
     bins: Dict[str, Value]
 
-    def __init__(self, lib: Value, script: Value, bins: Dict[str, Value]):
+    def __init__(
+        self, lib: Value, script: Value, import_wrapper_: Value, bins: Dict[str, Value]
+    ):
         self.lib = lib
         self.script = script
+        self.import_wrapper = import_wrapper_
         self.bins = bins
 
     def collect(self, path: str) -> Hash:
@@ -368,12 +389,15 @@ class GG:
             bin_hashes.append(self.bins[bin_name].hash())
 
         cmd = [
-            os.path.basename(script_path),
+            "import_wrapper.py",
+            "--module",
+            MODULE_NAME,
             hash_deref(self.lib.hash()),
+            hash_deref(self.script.hash()),
             "exec",
             name,
         ] + list(map(hash_deref, bin_hashes))
-        executables = [self.script.hash(),] + bin_hashes
+        executables = [self.import_wrapper.hash(), self.script.hash(),] + bin_hashes
         thunks = []
         values = [
             self.lib.hash(),
@@ -407,7 +431,14 @@ class GG:
         thunk_args = it.chain.from_iterable(["--thunk", v] for v in thunks)
         output_args = it.chain.from_iterable(["--output", v] for v in outputs)
         exec_args = it.chain.from_iterable(["--executable", v] for v in executables)
-        env_args = ["--envar", "PYTHONDONTWRITEBYTECODE=1"]
+        env_additions = {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            IMPORT_WRAPPER_HASH_ENVVAR: IMPORT_WRAPPER_HASH,
+            SCRIPT_NAME_ENVVAR: os.environ[SCRIPT_NAME_ENVVAR],
+        }
+        env_args = it.chain.from_iterable(
+            ["--envar", f"{k}={v}"] for k, v in env_additions.items()
+        )
         loc_args = self._thunk_location_args(dest_path)
         cmd_args = list(
             it.chain(
@@ -418,7 +449,7 @@ class GG:
                 exec_args,
                 loc_args,
                 env_args,
-                ["--", self.script.hash()],
+                ["--", self.import_wrapper.hash()],
                 cmd,
             )
         )
@@ -441,7 +472,8 @@ class GGWorker(GG):
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
         bdict = {bin_: Value(self, path, None, None, True) for bin_, path in bins}
-        super().__init__(lib, script, bdict)
+        iw = Value(self, None, IMPORT_WRAPPER_HASH, None, True)
+        super().__init__(lib, script, iw, bdict)
         self.nextOutput = 0
         self.nOuputs = MAX_FANOUT
 
@@ -478,12 +510,14 @@ class GGCoordinator(GG):
         script = Value(self, script_path, None, None, True)
         lib = Value(self, lib_path, None, None, True)
         bdict = {bin_: Value(self, which(bin_), None, None, True) for bin_ in bins}
+        iw = Value(self, None, IMPORT_WRAPPER_HASH, None, True)
         self.init()
         self.collect(unwrap(script.path()))
         self.collect(unwrap(lib.path()))
+        self.collect(import_wrapper.__file__)
         for _, bin_value in bdict.items():
             self.collect(unwrap(bin_value.path()))
-        super().__init__(lib, script, bdict)
+        super().__init__(lib, script, iw, bdict)
 
     def collect(self, path: str) -> Hash:
         return sub.check_output([which("gg-collect"), path]).decode().strip()

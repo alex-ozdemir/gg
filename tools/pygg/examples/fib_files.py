@@ -1,22 +1,7 @@
 #!/usr/bin/env python3.7
 # ARGS: fib 5
 # RESULT: 5
-# Copied
-import os, sys
-from importlib.util import spec_from_loader, module_from_spec
-from importlib.machinery import SourceFileLoader
-
-if not os.path.exists(sys.argv[1]):
-    import pygg
-else:
-    spec = spec_from_loader(
-        "pygg", SourceFileLoader("pygg", os.path.realpath(sys.argv[1]))
-    )
-    pygg = module_from_spec(spec)
-    spec.loader.exec_module(pygg) # type: ignore
-    del sys.argv[1]
-
-# End copy
+import pygg
 
 
 @pygg.thunk_fn()
