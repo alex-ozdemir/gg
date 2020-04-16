@@ -27,7 +27,7 @@ import pathlib
 import tempfile
 import itertools as it
 
-MAX_FANOUT = 10
+MAX_FANOUT = 32
 
 Hash = str
 
@@ -175,6 +175,7 @@ def arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
     if ex_type in GG_PRIM_TYS:
         return ex_type(arg)
     elif ex_type == Value:
+        gg.collect(arg)
         return Value(gg, arg, None, None, True)
     else:
         raise ValueError(
@@ -284,6 +285,9 @@ class GG:
         self.script = script
         self.bins = bins
 
+    def collect(self, path: str) -> Hash:
+        return ""
+
     def hash_file(self, path: str) -> Hash:
         return (
             sub.check_output([unwrap(self.bin("gg-hash-static").path()), path])
@@ -319,13 +323,16 @@ class GG:
             raise ValueError(f"save: {msg}")
 
         if isinstance(term, Value):
+            print(term.__dict__)
             p = term.path()
             if term.saved:
                 return term.hash()
             if p is None:
                 ret = self._save_bytes(term.as_bytes(), dest_path)
             else:
-                ret = self._save_path(p, dest_path)
+                new_path = self._save_path(p, dest_path)
+                term._path = new_path
+                ret = term.hash()
             term.saved = True
             return ret
         elif isinstance(term, Thunk):
@@ -343,7 +350,7 @@ class GG:
     def _save_bytes(self, data: bytes, dest_path: Optional[str]) -> Hash:
         raise Exception("NYI")
 
-    def _save_path(self, path: str, dest_path: Optional[str]) -> Hash:
+    def _save_path(self, path: str, dest_path: Optional[str]) -> str:
         raise Exception("NYI")
 
     def _thunk_location_args(self, dest_path: Optional[str]) -> List[str]:
@@ -452,11 +459,13 @@ class GGWorker(GG):
         f.close()
         return self.hash_file(dest_path)
 
-    def _save_path(self, path: str, dest_path: Optional[str]) -> Hash:
+    def _save_path(self, path: str, dest_path: Optional[str]) -> str:
         if dest_path is None:
             dest_path = self._next_output_file()
+        print("Before moving: ", os.listdir("."))
         sh.move(path, dest_path)
-        return self.hash_file(dest_path)
+        print("After: ", os.listdir("."))
+        return dest_path
 
     def _thunk_location_args(self, dest_path: Optional[str]) -> List[str]:
         if dest_path is None:
@@ -496,11 +505,12 @@ class GGCoordinator(GG):
         f.close()
         return a
 
-    def _save_path(self, path: str, dest_path: Optional[str]) -> Hash:
+    def _save_path(self, path: str, dest_path: Optional[str]) -> str:
         if dest_path is not None:
             sh.copy(path, dest_path)
             path = dest_path
-        return self.collect(path)
+            self.collect(path)
+        return path
 
     def _thunk_location_args(self, dest_path: Optional[str]) -> List[str]:
         if dest_path is None:
