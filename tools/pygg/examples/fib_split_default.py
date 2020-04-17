@@ -30,7 +30,7 @@ def split_outputs(_n: pygg.Value) -> List[str]:
 
 
 @gg.thunk_fn(outputs=split_outputs)
-def split(n: pygg.Value) -> pygg.MultiOutput:
+def split(n: pygg.Value) -> pygg.OutputDict:
     i = int(n.as_str())
     return {
         "n1": gg.str_value(str(i - 1)),

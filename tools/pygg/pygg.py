@@ -26,6 +26,9 @@ import functools as ft
 import pathlib
 import tempfile
 import itertools as it
+import re
+
+SHEBANG_RE = "^#! */usr/bin/env +python3.7"
 
 MODULE_NAME = "pygg"
 MAX_FANOUT = 10
@@ -152,6 +155,7 @@ ActualArg = Union[Prim, Value, "Thunk", "ThunkOutput"]
 ACTUAL_ARG_TYS = [str, int, float, Value, "Thunk", "ThunkOutput"]
 
 Output = Union[Value, "Thunk"]
+OUTPUT_TYS = [Value, "Thunk"]
 OutputDict = Dict[str, Output]
 MultiOutput = Union[Value, "Thunk", OutputDict]
 
@@ -267,7 +271,25 @@ class Thunk:
     def exec(self) -> MultiOutput:
         assert self.executable
         r = self.f.f(*self.args)
-        return r
+        n = self.f.f.__name__
+        ann = self.f.f.__annotations__["return"]
+        if ann in OUTPUT_TYS and isinstance(r, ann):
+            return r
+        elif ann == OutputDict and isinstance(r, dict):
+            outputs = self.f.named_outputs(self.gg, self.args)
+            if outputs is None:
+                raise IE("Missing outputs function")
+            if set(r.keys()) != set(outputs):
+                _err(
+                    f"The thunk {n} returned outputs {set(r.keys())}, but its 'outputs' function says that it should return outputs {set(outputs)}."
+                )
+            return r
+        elif ann == Output and (isinstance(r, Value) or isinstance(r, Thunk)): # type: ignore
+            return r
+        else:
+            _err(
+                f"The thunk function {n} returned a {type(r)}, which is not a {ann}, as annotated"
+            )
 
     def __repr__(self) -> str:
         return f"Thunk {pprint.pformat(self.__dict__)}"
@@ -317,6 +339,7 @@ class GG:
     bin_order: List[Value]
     thunk_functions: Dict[str, ThunkFn]
     args: List[str]
+    in_thunk: bool
 
     def __init__(
         self, lib: Value, script: Value, import_wrapper_: Value, args: List[str]
@@ -328,6 +351,7 @@ class GG:
         self.bin_order = []
         self.thunk_functions = {}
         self.args = args
+        self.in_thunk = False
 
     def _collect(self, path: str) -> Hash:
         return ""
@@ -337,16 +361,26 @@ class GG:
             sub.check_output([self.bin("gg-hash-static").path(), path]).decode().strip()
         )
 
+    def _assert_thunk_fn(self, fn_name: str, in_thunk_fn: bool) -> None:
+        """ Checks that in_thunk_fn is the current state """
+        if in_thunk_fn != self.in_thunk:
+            place = "inside" if in_thunk_fn else "outside"
+            _err(f"GG.{fn_name} can only be called {place} of a thunk function")
+
     def str_value(self, string: str) -> Value:
+        self._assert_thunk_fn("str_value", True)
         return self.bytes_value(string.encode())
 
     def bytes_value(self, bytes_: bytes) -> Value:
+        self._assert_thunk_fn("bytes_value", True)
         return Value(self, None, None, bytes_, False)
 
     def file_value(self, path: str, saved: bool = False) -> Value:
+        self._assert_thunk_fn("file_value", True)
         return Value(self, path, None, None, saved)
 
     def thunk(self, f: ThunkFn, *args: ActualArg) -> Thunk:
+        self._assert_thunk_fn("thunk", True)
         return Thunk(f, list(args), self)
 
     def _save_output(
@@ -386,6 +420,7 @@ class GG:
         return self.bins[name]
 
     def install(self, cmd: str) -> None:
+        self._assert_thunk_fn("install", False)
         raise Exception("abstract")
 
     def _install_value(self, bin_: Value, names: List[str]) -> None:
@@ -488,6 +523,8 @@ class GG:
     def thunk_fn(
         self, outputs: Optional[Callable[..., List[str]]] = None
     ) -> Callable[[Callable], ThunkFn]:
+        self._assert_thunk_fn("thunk_fn", False)
+
         def decorator_thunk_fn(func: Callable) -> ThunkFn:
             def e(msg: str, note: Optional[str] = None) -> NoReturn:
                 m = f"In function `{func.__name__}`,\n\t{msg}\n, so `{func.__name__}` cannot be a thunk."
@@ -498,9 +535,9 @@ class GG:
             if "return" not in func.__annotations__:
                 e("there is no annotated return")
             ret = func.__annotations__["return"]
-            if ret not in [MultiOutput, Output, Value, Thunk]:  # type: ignore
+            if ret not in [OutputDict, Output, Value, Thunk]:  # type: ignore
                 e("the return is not annotated as a value or thunk")
-            if ret == MultiOutput and outputs is None:  # type: ignore
+            if ret == OutputDict and outputs is None:  # type: ignore
                 e("the return is a MultiOutput, but there is no outputs")
             tf = ThunkFn(f=func, outputs=outputs)
             argspec = tf.sig()
@@ -586,7 +623,11 @@ class GGWorker(GG):
         t_args = self.args[2:]
         f = self.thunk_functions[t_name]
         t = Thunk.from_pgm_args(self, f, t_args)
+        if self.in_thunk:
+            raise IE("recursive thunk exec?!")
+        self.in_thunk = True
         result = t.exec()
+        self.in_thunk = False
         self._save_output(result, DEFAULT_OUT)
         for path in self.unused_outputs():
             pathlib.Path(path).touch(exist_ok=False)
@@ -655,14 +696,18 @@ class GGCoordinator(GG):
 
 def init() -> GG:
     args = [a for a in sys.argv]
-    if not os.access(args[0], os.X_OK):
-        _err(f"The script {args[0]} is not executable. It must be.")
     if len(args) < 2:
         _err("There must be at least one argument: (init or run)")
     mode = args[1]
     del args[1]
     gg: GG
     if mode == "init":
+        if not os.access(args[0], os.X_OK):
+            _err(f"The script {args[0]} is not executable. It must be.")
+        if not re.match(SHEBANG_RE, open(args[0], "r").read(100), re.MULTILINE):
+            _err(
+                f"The script {args[0]} must contain the shebang '#! /usr/bin/env python3.7'.\nThis is needed to run the script on AWS lambda."
+            )
         gg = GGCoordinator(args)
     elif mode == "exec":
         gg = GGWorker(args)

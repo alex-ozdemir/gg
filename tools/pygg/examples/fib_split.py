@@ -23,7 +23,6 @@ def fib_(n: pygg.Value) -> pygg.Output:
         b = gg.thunk(fib_, s["n2"])
         return gg.thunk(add_str, a, b)
 
-
 def split_outputs(_n: pygg.Value) -> List[str]:
     return ["n1", "n2"]
 
