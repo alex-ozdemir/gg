@@ -86,7 +86,7 @@ if IMPORT_WRAPPER_HASH_ENVVAR in os.environ:
     IMPORT_WRAPPER_HASH = os.environ[IMPORT_WRAPPER_HASH_ENVVAR]
 else:
     # Local
-    import import_wrapper
+    import import_wrapper  # type: ignore
 
     IMPORT_WRAPPER_HASH = gg_hash(open(import_wrapper.__file__, "rb").read(), "V")
 
@@ -122,7 +122,9 @@ class Value:
     def as_str(self) -> str:
         return self.as_bytes().decode()
 
-    def path(self) -> Optional[str]:
+    def path(self) -> str:
+        if self._path is None:
+            raise ValueError(f"Value {self} has no path: it has not been written to the filesystem")
         return self._path
 
     def hash(self) -> str:
@@ -143,7 +145,7 @@ GG_PRIM_TYS = [str, int, float]
 FormalArg = Union[Prim, Value]
 FORMAL_ARG_TYS = [str, int, float, Value]
 
-ActualArg = Union[Prim, Value, "Thunk"]
+ActualArg = Union[Prim, Value, "Thunk", "ThunkOutput"]
 ACTUAL_ARG_TYS = [str, int, float, Value, "Thunk", "ThunkOutput"]
 
 Output = Union[Value, "Thunk"]
@@ -191,7 +193,7 @@ class ThunkFn(NamedTuple):
         ):
             e(f"The output profile, {self.outputs.__name__} must return a List[str]")
 
-    def __call__(self, *args):
+    def __call__(self, *args):  # type: ignore
         return self.f(*args)
 
 
@@ -333,9 +335,7 @@ class GG:
 
     def _hash_file(self, path: str) -> Hash:
         return (
-            sub.check_output([unwrap(self.bin("gg-hash-static").path()), path])
-            .decode()
-            .strip()
+            sub.check_output([self.bin("gg-hash-static").path(), path]).decode().strip()
         )
 
     def str_value(self, string: str) -> Value:
@@ -366,7 +366,7 @@ class GG:
             raise ValueError(f"save: {msg}")
 
         if isinstance(term, Value):
-            p = term.path()
+            p = term._path
             if term.saved:
                 return term.hash()
             if p is None:
@@ -393,7 +393,7 @@ class GG:
         raise Exception("abstract")
 
     def _install_value(self, bin_: Value, names: List[str]) -> None:
-        path = bin_.path()
+        path = bin_._path
         if path is None:
             raise IE("Installed binaries must have paths!")
         elif not os.path.exists(path):
@@ -484,7 +484,7 @@ class GG:
         loc_args = self._thunk_location_args(dest_path)
         cmd_args = list(
             it.chain(
-                [unwrap(self.bin("gg-create-thunk-static").path())],
+                [self.bin("gg-create-thunk-static").path()],
                 value_args,
                 thunk_args,
                 output_args,
@@ -622,8 +622,8 @@ class GGCoordinator(GG):
         lib = Value(self, lib_path, None, None, True)
         iw = Value(self, None, IMPORT_WRAPPER_HASH, None, True)
         self.init()
-        self._collect(unwrap(script.path()))
-        self._collect(unwrap(lib.path()))
+        self._collect(script.path())
+        self._collect(lib.path())
         self._collect(import_wrapper.__file__)
         super().__init__(lib, script, iw, args)
 
@@ -692,6 +692,7 @@ def init() -> GG:
         e("There must be at least one argument: (init or run)")
     mode = args[1]
     del args[1]
+    gg: GG
     if mode == "init":
         gg = GGCoordinator(args)
     elif mode == "exec":
