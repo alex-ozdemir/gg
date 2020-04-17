@@ -3,9 +3,11 @@
 # RESULT: 5
 import pygg
 
+gg = pygg.init()
 
-@pygg.thunk_fn()
-def fib(gg: pygg.GG, n: int) -> pygg.Output:
+
+@gg.thunk_fn()
+def fib(n: int) -> pygg.Output:
     if n < 2:
         return gg.str_value(str(n))
     else:
@@ -14,8 +16,8 @@ def fib(gg: pygg.GG, n: int) -> pygg.Output:
         return gg.thunk(add_str, [a, b])
 
 
-@pygg.thunk_fn()
-def add_str(gg: pygg.GG, a: pygg.Value, b: pygg.Value) -> pygg.Output:
+@gg.thunk_fn()
+def add_str(a: pygg.Value, b: pygg.Value) -> pygg.Output:
     ai = int(a.as_str())
     bi = int(b.as_str())
     path = 'random'
@@ -24,4 +26,4 @@ def add_str(gg: pygg.GG, a: pygg.Value, b: pygg.Value) -> pygg.Output:
     return gg.file_value(path)
 
 
-pygg.main()
+gg.main()

@@ -4,8 +4,11 @@
 import pygg
 import subprocess as sub
 
-@pygg.thunk_fn()
-def fib(gg: pygg.GG, n: int) -> pygg.Output:
+gg = pygg.init()
+
+
+@gg.thunk_fn()
+def fib(n: int) -> pygg.Output:
     if n < 2:
         return gg.str_value(str(n))
     else:
@@ -13,10 +16,12 @@ def fib(gg: pygg.GG, n: int) -> pygg.Output:
         b = gg.thunk(fib, [n - 2])
         return gg.thunk(add_str, [a, b])
 
-pygg.install("add_str")
 
-@pygg.thunk_fn()
-def add_str(gg: pygg.GG, a: pygg.Value, b: pygg.Value) -> pygg.Output:
+gg.install("add_str")
+
+
+@gg.thunk_fn()
+def add_str(a: pygg.Value, b: pygg.Value) -> pygg.Output:
     ap = a.path()
     bp = b.path()
     assert ap is not None
@@ -25,4 +30,4 @@ def add_str(gg: pygg.GG, a: pygg.Value, b: pygg.Value) -> pygg.Output:
     return gg.file_value("out")
 
 
-pygg.main()
+gg.main()

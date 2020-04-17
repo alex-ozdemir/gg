@@ -3,8 +3,11 @@
 # RESULT: 11
 import pygg
 
-@pygg.thunk_fn()
-def trib(gg: pygg.GG, n: int) -> pygg.Output:
+gg = pygg.init()
+
+
+@gg.thunk_fn()
+def trib(n: int) -> pygg.Output:
     if n < 3:
         return gg.str_value(str(n))
     else:
@@ -14,11 +17,11 @@ def trib(gg: pygg.GG, n: int) -> pygg.Output:
         return gg.thunk(add_str, [gg.thunk(add_str, [a, b]), c])
 
 
-@pygg.thunk_fn()
-def add_str(gg: pygg.GG, a: pygg.Value, b: pygg.Value) -> pygg.Output:
+@gg.thunk_fn()
+def add_str(a: pygg.Value, b: pygg.Value) -> pygg.Output:
     ai = int(a.as_str())
     bi = int(b.as_str())
     return gg.str_value(str(ai + bi))
 
 
-pygg.main()
+gg.main()
