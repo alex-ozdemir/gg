@@ -32,6 +32,7 @@ MAX_FANOUT = 10
 IMPORT_WRAPPER_HASH_ENVVAR = "IMPORT_WRAPPER_HASH"
 SCRIPT_NAME_ENVVAR = "SCRIPT_NAME_ENVVAR"
 DEFAULT_OUT = "out"
+REQUIRED_BINS = ["gg-create-thunk-static", "gg-hash-static"]
 
 Hash = str
 
@@ -650,14 +651,6 @@ class GGCoordinator(GG):
         f = self.thunk_functions[t_name]
         t = Thunk.from_pgm_args(self, f, t_args)
         self._save(t, DEFAULT_OUT)
-
-
-class GGState(NamedTuple):
-    thunk_functions: Dict[str, ThunkFn]
-    bins: List[str]
-
-
-REQUIRED_BINS = ["gg-create-thunk-static", "gg-hash-static"]
 
 
 def init() -> GG:
