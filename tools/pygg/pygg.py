@@ -39,18 +39,20 @@ script_path = os.path.realpath(sys.argv[0])
 lib_path = os.path.realpath(__file__)
 
 
-
 class PyggError(Exception):
     pass
 
+
 def _err(s: str) -> NoReturn:
     raise PyggError(s)
+
 
 class IE(PyggError):
     """ Internal Error """
 
     def __init__(self, msg: str) -> None:
         super().__init__(f"Internal Error: {msg}")
+
 
 T = TypeVar("T")
 
@@ -62,7 +64,7 @@ def _unreach() -> NoReturn:
 def _which(cmd: str) -> str:
     t = sh.which(cmd)
     if t is None:
-        raise ValueError(f"_which: {cmd} is not present/executable")
+        _err(f"'{cmd}' is not present/executable")
     return t
 
 
@@ -124,7 +126,7 @@ class Value:
 
     def path(self) -> str:
         if self._path is None:
-            raise ValueError(f"Value {self} has no path: it has not been written to the filesystem")
+            _err(f"Value {self} has no path: it has not been written to the filesystem")
         return self._path
 
     def hash(self) -> str:
@@ -164,20 +166,17 @@ class ThunkFn(NamedTuple):
         if self.outputs is not None:
             op = self.outputs(*args)
             if len(op) == 0:
-                raise ValueError(
+                _err(
                     f"The output profile {self.outputs.__name__} returned an empty list. Thunks must have at least one output.\nReturn:\n\t{op}"
                 )
             return op
         return None
 
     def _check_output_sig(self) -> None:
-        def ty_sig(s: inspect.FullArgSpec) -> List[type]:
-            return [s.annotations[fa] for fa in s.args]
-
         """ Check signature agreement """
 
-        def e(m: str) -> NoReturn:
-            raise ValueError(f"ThunkFn consistency: {m}")
+        def ty_sig(s: inspect.FullArgSpec) -> List[type]:
+            return [s.annotations[fa] for fa in s.args]
 
         f_sig = ty_sig(self.sig())
         if self.outputs is None:
@@ -185,14 +184,14 @@ class ThunkFn(NamedTuple):
         o_sig = inspect.getfullargspec(self.outputs)
         o_args = ty_sig(o_sig)
         if f_sig != o_args:
-            e(
+            _err(
                 f"The functions {self.f.__name__} and {self.outputs.__name__} should take the same arguments, since the latter is an output profile function for the former, but\n\t{f_sig}\nis not equal to\n\t{o_args}\n"
             )
         if (
             "return" not in o_sig.annotations
             or o_sig.annotations["return"] != List[str]
         ):
-            e(f"The output profile, {self.outputs.__name__} must return a List[str]")
+            _err(f"The output profile, {self.outputs.__name__} must return a List[str]")
 
     def __call__(self, *args):  # type: ignore
         return self.f(*args)
@@ -208,7 +207,7 @@ def arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
         gg._collect(arg)
         return Value(gg, arg, None, None, True)
     else:
-        raise ValueError(
+        _err(
             f"prim_dec: Unacceptable type {ex_type}. Acceptable types: {FORMAL_ARG_TYS}"
         )
 
@@ -241,7 +240,7 @@ class Thunk:
             m = f"Since\n\t{msg}\n, the thunk invocation\n\t{inv}\nis invalid\n"
             if note is not None:
                 m += f"\nNote: {note}\n"
-            raise ValueError(m)
+            _err(m)
 
         if n not in gg.thunk_functions:
             e(f"{n} is not a registered thunk function")
@@ -300,9 +299,7 @@ def hash_tag(h: Hash, filename: Optional[str]) -> str:
 def prim_enc(prim: Prim) -> str:
     t = type(prim)
     if t not in GG_PRIM_TYS:
-        raise ValueError(
-            f"prim_end: Unacceptable type {t}. Acceptable types: {GG_PRIM_TYS}"
-        )
+        _err(f"prim_end: Unacceptable type {t}. Acceptable types: {GG_PRIM_TYS}")
     return str(prim)
 
 
@@ -357,15 +354,12 @@ class GG:
         if isinstance(output, dict):
             for name, t in output.items():
                 if not isinstance(name, str):
-                    raise ValueError(f"The key {name} of {output} is not a string")
+                    _err(f"The key {name} of {output} is not a string")
                 self._save(t, name)
         else:
             self._save(output, dest_path)
 
     def _save(self, term: ActualArg, dest_path: Optional[str] = None) -> Hash:
-        def e(msg: str) -> NoReturn:
-            raise ValueError(f"save: {msg}")
-
         if isinstance(term, Value):
             p = term._path
             if term.saved:
@@ -383,11 +377,11 @@ class GG:
         elif isinstance(term, ThunkOutput):
             return hash_tag(self._save_thunk(term.thunk, dest_path), term.filename)
         else:
-            e(f"Unknown type {type(term)}")
+            _err(f"Unknown type {type(term)}")
 
     def bin(self, name: str) -> Value:
         if name not in self.bins:
-            raise ValueError(f"Unknown bin: {name}")
+            _err(f"Unknown bin: {name}")
         return self.bins[name]
 
     def install(self, cmd: str) -> None:
@@ -398,14 +392,12 @@ class GG:
         if path is None:
             raise IE("Installed binaries must have paths!")
         elif not os.path.exists(path):
-            raise ValueError(f"There is no file at '{path}', so it cannot be installed")
+            _err(f"There is no file at '{path}', so it cannot be installed")
         elif not os.access(path, os.X_OK):
-            raise ValueError(
-                f"The file at '{path}' is not executable, so it cannot be installed"
-            )
+            _err(f"The file at '{path}' is not executable, so it cannot be installed")
         for name in names:
             if name in self.bins:
-                raise ValueError(f"There is already a binary installed of name {name}")
+                _err(f"There is already a binary installed of name {name}")
             self.bins[name] = bin_
         self.bin_order.append(bin_)
 
@@ -420,34 +412,27 @@ class GG:
 
     def _save_thunk(self, t: Thunk, dest_path: Optional[str]) -> Hash:
         name = t.f.f.__name__
-
-        def e(msg: str) -> NoReturn:
-            raise ValueError(f"_save_thunk: `{name}`: {msg}")
-
-        bin_hashes = []
-        for bin_v in self.bin_order:
-            bin_hashes.append(bin_v.hash())
-
-        cmd = (
-            [
-                "import_wrapper.py",
-                "--module",
-                MODULE_NAME,
-                hash_deref(self.lib.hash()),
-                hash_deref(self.script.hash()),
-                "exec",
-            ]
-            + list(map(hash_deref, bin_hashes))
-            + [name]
+        bin_hashes = [bin_v.hash() for bin_v in self.bin_order]
+        cmd = list(
+            it.chain(
+                [
+                    "import_wrapper.py",
+                    "--module",
+                    MODULE_NAME,
+                    hash_deref(self.lib.hash()),
+                    hash_deref(self.script.hash()),
+                    "exec",
+                ],
+                map(hash_deref, bin_hashes),
+                [name],
+            )
         )
-        executables = [self.import_wrapper.hash(), self.script.hash(),] + bin_hashes
+        executables = [self.import_wrapper.hash(), self.script.hash()] + bin_hashes
         thunks = []
-        values = [
-            self.lib.hash(),
-        ]
+        values = [self.lib.hash()]
         fparams = t.f.sig().args
         if len(t.args) != len(fparams):
-            e("The number of formal and actual params are not equal")
+            raise IE("The number of formal and actual params are not equal")
         for fp, ap in zip(fparams, t.args):
             ex_type = t.f.f.__annotations__[fp]
             if ex_type in GG_PRIM_TYS:
@@ -496,14 +481,7 @@ class GG:
                 cmd,
             )
         )
-        result = sub.run(cmd_args, stderr=sub.PIPE, stdout=sub.PIPE,)
-        if result.returncode != 0:
-            print(
-                f"Non-zero return {result.returncode} for command:\n\t{' '.join(cmd_args)}"
-            )
-            print("STDOUT:", result.stdout.decode(), file=sys.stderr, sep="\n")
-            print("STDERR:", result.stderr.decode(), file=sys.stdout, sep="\n")
-            sys.exit(1)
+        result = sub.run(cmd_args, stderr=sub.PIPE, stdout=sub.PIPE, check=True)
         return result.stderr.decode().strip()
 
     def thunk_fn(
@@ -514,7 +492,7 @@ class GG:
                 m = f"In function `{func.__name__}`,\n\t{msg}\n, so `{func.__name__}` cannot be a thunk."
                 if note is not None:
                     m += f"\n\nNote: {note}"
-                raise ValueError(m)
+                _err(m)
 
             if "return" not in func.__annotations__:
                 e("there is no annotated return")
@@ -661,7 +639,7 @@ class GGCoordinator(GG):
     def install(self, bin_: str) -> None:
         path = sh.which(bin_)
         if path is None:
-            raise ValueError(f"Cannot find the binary '{bin_}', so cannot install it")
+            _err(f"Cannot find the binary '{bin_}', so cannot install it")
         v = Value(self, path, None, None, True)
         self._collect(path)
         self._install_value(v, bin_names(path))
@@ -683,14 +661,11 @@ REQUIRED_BINS = ["gg-create-thunk-static", "gg-hash-static"]
 
 
 def init() -> GG:
-    def e(msg: str) -> NoReturn:
-        raise ValueError(f"pygg: {msg}")
-
     args = [a for a in sys.argv]
     if not os.access(args[0], os.X_OK):
-        e(f"The script {args[0]} is not executable. It must be.")
+        _err(f"The script {args[0]} is not executable. It must be.")
     if len(args) < 2:
-        e("There must be at least one argument: (init or run)")
+        _err("There must be at least one argument: (init or run)")
     mode = args[1]
     del args[1]
     gg: GG
@@ -699,7 +674,7 @@ def init() -> GG:
     elif mode == "exec":
         gg = GGWorker(args)
     else:
-        e(f"The first argument must be (init|run), not {mode}")
+        _err(f"The first argument must be (init|run), not {mode}")
     for b in REQUIRED_BINS:
         gg.install(b)
     return gg
