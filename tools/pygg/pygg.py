@@ -39,24 +39,24 @@ script_path = os.path.realpath(sys.argv[0])
 lib_path = os.path.realpath(__file__)
 
 
-class IE(Exception):
+
+class PyggError(Exception):
+    pass
+
+def _err(s: str) -> NoReturn:
+    raise PyggError(s)
+
+class IE(PyggError):
     """ Internal Error """
 
     def __init__(self, msg: str) -> None:
         super().__init__(f"Internal Error: {msg}")
 
-
 T = TypeVar("T")
 
 
-def unwrap(t: Optional[T]) -> T:
-    if t is None:
-        raise ValueError("Unwrapped empty Optional")
-    return t
-
-
-def unreachable() -> NoReturn:
-    raise Exception("This location should be unreachable")
+def _unreach() -> NoReturn:
+    raise IE("This location should be unreachable")
 
 
 def _which(cmd: str) -> str:
@@ -66,7 +66,7 @@ def _which(cmd: str) -> str:
     return t
 
 
-def gg_hash(data: bytes, tag: str) -> Hash:
+def _gg_hash(data: bytes, tag: str) -> Hash:
     sha = hashlib.sha256()
     sha.update(data)
     h = (
@@ -88,7 +88,7 @@ else:
     # Local
     import import_wrapper  # type: ignore
 
-    IMPORT_WRAPPER_HASH = gg_hash(open(import_wrapper.__file__, "rb").read(), "V")
+    IMPORT_WRAPPER_HASH = _gg_hash(open(import_wrapper.__file__, "rb").read(), "V")
 
 
 class Value:
@@ -135,7 +135,7 @@ class Value:
                 assert (
                     self._bytes is not None
                 ), "No bytes nor hash nor path for this value..."
-                self._hash = gg_hash(self._bytes, "V")
+                self._hash = _gg_hash(self._bytes, "V")
         return self._hash
 
 
@@ -149,7 +149,8 @@ ActualArg = Union[Prim, Value, "Thunk", "ThunkOutput"]
 ACTUAL_ARG_TYS = [str, int, float, Value, "Thunk", "ThunkOutput"]
 
 Output = Union[Value, "Thunk"]
-MultiOutput = Union[Value, "Thunk", Dict[str, Union["Thunk", Value]]]
+OutputDict = Dict[str, Output]
+MultiOutput = Union[Value, "Thunk", OutputDict]
 
 
 class ThunkFn(NamedTuple):
@@ -459,9 +460,9 @@ class GG:
                 elif isinstance(ap, Thunk) or isinstance(ap, ThunkOutput):
                     thunks.append(h)
                 else:
-                    unreachable()
+                    _unreach()
             else:
-                unreachable()
+                _unreach()
         outputs = []
         op = t.f.named_outputs(self, t.args)
         if op is None:
