@@ -347,8 +347,8 @@ class GG:
     def file_value(self, path: str, saved: bool = False) -> Value:
         return Value(self, path, None, None, saved)
 
-    def thunk(self, f: ThunkFn, args: List[ActualArg]) -> Thunk:
-        return Thunk(f, args, self)
+    def thunk(self, f: ThunkFn, *args: ActualArg) -> Thunk:
+        return Thunk(f, list(args), self)
 
     def _save_output(
         self, output: MultiOutput, dest_path: Optional[str] = None

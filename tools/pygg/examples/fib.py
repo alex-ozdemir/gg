@@ -12,9 +12,9 @@ def fib(n: int) -> pygg.Output:
     if n < 2:
         return gg.str_value(str(n))
     else:
-        a = gg.thunk(fib, [n - 1])
-        b = gg.thunk(fib, [n - 2])
-        return gg.thunk(add_str, [a, b])
+        a = gg.thunk(fib, n - 1)
+        b = gg.thunk(fib, n - 2)
+        return gg.thunk(add_str, a, b)
 
 
 @gg.thunk_fn()

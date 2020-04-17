@@ -18,10 +18,10 @@ def fib_(n: pygg.Value) -> pygg.Output:
     if i < 2:
         return gg.str_value(str(i))
     else:
-        s = gg.thunk(split, [n])
-        a = gg.thunk(fib_, [s])
-        b = gg.thunk(fib_, [s["n2"]])
-        return gg.thunk(add_str, [a, b])
+        s = gg.thunk(split, n)
+        a = gg.thunk(fib_, s)
+        b = gg.thunk(fib_, s["n2"])
+        return gg.thunk(add_str, a, b)
 
 
 def split_outputs(_n: pygg.Value) -> List[str]:

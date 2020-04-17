@@ -11,10 +11,10 @@ def trib(n: int) -> pygg.Output:
     if n < 3:
         return gg.str_value(str(n))
     else:
-        a = gg.thunk(trib, [n - 1])
-        b = gg.thunk(trib, [n - 2])
-        c = gg.thunk(trib, [n - 3])
-        return gg.thunk(add_str, [gg.thunk(add_str, [a, b]), c])
+        a = gg.thunk(trib, n - 1)
+        b = gg.thunk(trib, n - 2)
+        c = gg.thunk(trib, n - 3)
+        return gg.thunk(add_str, gg.thunk(add_str, a, b), c)
 
 
 @gg.thunk_fn()
