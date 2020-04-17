@@ -163,6 +163,7 @@ MultiOutput = Union[Value, "Thunk", OutputDict]
 class ThunkFn(NamedTuple):
     f: Callable[..., MultiOutput]
     outputs: Optional[Callable[..., List[str]]]
+    n_anonymous: Optional[Callable[..., int]]
 
     def sig(self) -> inspect.FullArgSpec:
         return inspect.getfullargspec(self.f)
@@ -292,7 +293,7 @@ class Thunk:
             )
 
     def __repr__(self) -> str:
-        return f"Thunk {pprint.pformat(self.__dict__)}"
+        return f"Thunk {self.f.f.__name__}({', '.join(str(a) for a in self.args)})"
 
     def default_output(self) -> "ThunkOutput":
         return ThunkOutput(thunk=self, filename=None)
@@ -490,7 +491,8 @@ class GG:
             outputs.append(DEFAULT_OUT)
         else:
             outputs.extend(op)
-        outputs += list(f"{i:03d}" for i in range(MAX_FANOUT))
+        n_anon = t.f.n_anonymous(*t.args) if t.f.n_anonymous is not None else MAX_FANOUT
+        outputs += list(f"{i:03d}" for i in range(n_anon))
         value_args = it.chain.from_iterable(["--value", v] for v in values)
         thunk_args = it.chain.from_iterable(["--thunk", v] for v in thunks)
         output_args = it.chain.from_iterable(["--output", v] for v in outputs)
@@ -521,7 +523,9 @@ class GG:
         return result.stderr.decode().strip()
 
     def thunk_fn(
-        self, outputs: Optional[Callable[..., List[str]]] = None
+        self,
+        outputs: Optional[Callable[..., List[str]]] = None,
+        n_anonymous: Optional[Callable[..., int]] = None,
     ) -> Callable[[Callable], ThunkFn]:
         self._assert_thunk_fn("thunk_fn", False)
 
@@ -536,10 +540,10 @@ class GG:
                 e("there is no annotated return")
             ret = func.__annotations__["return"]
             if ret not in [OutputDict, Output, Value, Thunk]:  # type: ignore
-                e("the return is not annotated as a value or thunk")
+                e("the return is not annotated as a value, thunk, or output dictionary")
             if ret == OutputDict and outputs is None:  # type: ignore
                 e("the return is a MultiOutput, but there is no outputs")
-            tf = ThunkFn(f=func, outputs=outputs)
+            tf = ThunkFn(f=func, outputs=outputs, n_anonymous=n_anonymous)
             argspec = tf.sig()
             if argspec.varargs is not None:
                 e("there are varargs")
@@ -582,7 +586,8 @@ class GGWorker(GG):
 
     def _next_output_file(self) -> str:
         self.nextOutput += 1
-        assert self.nextOutput <= self.nOuputs
+        if self.nextOutput > self.nOuputs:
+            _err("anonymous output allocation exceeded")
         return f"{self.nextOutput - 1:03d}"
 
     def _save_bytes(self, data: bytes, dest_path: Optional[str]) -> Hash:
@@ -626,6 +631,8 @@ class GGWorker(GG):
         if self.in_thunk:
             raise IE("recursive thunk exec?!")
         self.in_thunk = True
+        if f.n_anonymous is not None:
+            self.nOuputs = f.n_anonymous(*t.args)
         result = t.exec()
         self.in_thunk = False
         self._save_output(result, DEFAULT_OUT)
