@@ -191,6 +191,9 @@ class ThunkFn(NamedTuple):
         ):
             e(f"The output profile, {self.outputs.__name__} must return a List[str]")
 
+    def __call__(self, *args):
+        return self.f(*args)
+
 
 def arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
     """ Interprets the thunk argument `arg` as `ex_type`.
