@@ -26,6 +26,8 @@ import functools as ft
 import pathlib
 import tempfile
 import itertools as it
+import traceback as tb
+import enum
 import re
 
 SHEBANG_RE = "^#! */usr/bin/env +python3.7"
@@ -285,7 +287,7 @@ class Thunk:
                     f"The thunk {n} returned outputs {set(r.keys())}, but its 'outputs' function says that it should return outputs {set(outputs)}."
                 )
             return r
-        elif ann == Output and (isinstance(r, Value) or isinstance(r, Thunk)): # type: ignore
+        elif ann == Output and (isinstance(r, Value) or isinstance(r, Thunk)):  # type: ignore
             return r
         else:
             _err(
@@ -369,20 +371,32 @@ class GG:
             _err(f"GG.{fn_name} can only be called {place} of a thunk function")
 
     def str_value(self, string: str) -> Value:
-        self._assert_thunk_fn("str_value", True)
-        return self.bytes_value(string.encode())
+        try:
+            self._assert_thunk_fn("str_value", True)
+            return self.bytes_value(string.encode())
+        except PyggError as e:
+            _print_exit(e)
 
     def bytes_value(self, bytes_: bytes) -> Value:
-        self._assert_thunk_fn("bytes_value", True)
-        return Value(self, None, None, bytes_, False)
+        try:
+            self._assert_thunk_fn("bytes_value", True)
+            return Value(self, None, None, bytes_, False)
+        except PyggError as e:
+            _print_exit(e)
 
     def file_value(self, path: str, saved: bool = False) -> Value:
-        self._assert_thunk_fn("file_value", True)
-        return Value(self, path, None, None, saved)
+        try:
+            self._assert_thunk_fn("file_value", True)
+            return Value(self, path, None, None, saved)
+        except PyggError as e:
+            _print_exit(e)
 
     def thunk(self, f: ThunkFn, *args: ActualArg) -> Thunk:
-        self._assert_thunk_fn("thunk", True)
-        return Thunk(f, list(args), self)
+        try:
+            self._assert_thunk_fn("thunk", True)
+            return Thunk(f, list(args), self)
+        except PyggError as e:
+            _print_exit(e)
 
     def _save_output(
         self, output: MultiOutput, dest_path: Optional[str] = None
@@ -416,9 +430,12 @@ class GG:
             _err(f"Unknown type {type(term)}")
 
     def bin(self, name: str) -> Value:
-        if name not in self.bins:
-            _err(f"Unknown bin: {name}")
-        return self.bins[name]
+        try:
+            if name not in self.bins:
+                _err(f"Unknown bin: {name}")
+            return self.bins[name]
+        except PyggError as e:
+            _print_exit(e)
 
     def install(self, cmd: str) -> None:
         self._assert_thunk_fn("install", False)
@@ -535,36 +552,40 @@ class GG:
                 if note is not None:
                     m += f"\n\nNote: {note}"
                 _err(m)
-
-            if "return" not in func.__annotations__:
-                e("there is no annotated return")
-            ret = func.__annotations__["return"]
-            if ret not in [OutputDict, Output, Value, Thunk]:  # type: ignore
-                e("the return is not annotated as a value, thunk, or output dictionary")
-            if ret == OutputDict and outputs is None:  # type: ignore
-                e("the return is a MultiOutput, but there is no outputs")
-            tf = ThunkFn(f=func, outputs=outputs, n_anonymous=n_anonymous)
-            argspec = tf.sig()
-            if argspec.varargs is not None:
-                e("there are varargs")
-            if argspec.varkw is not None:
-                e("there are keyword args")
-            if argspec.defaults is not None:
-                e("there are default arg values")
-            params = argspec.args
-            for p in params:
-                if p not in func.__annotations__:
-                    e(f"the parameter `{p}` is not annotated")
-                if func.__annotations__[p] not in [str, Value, int, float]:
+            try:
+                if "return" not in func.__annotations__:
+                    e("there is no annotated return")
+                ret = func.__annotations__["return"]
+                if ret not in [OutputDict, Output, Value, Thunk]:  # type: ignore
                     e(
-                        f"the parameter `{p}` has unacceptable type",
-                        "the acceptable types are: [str, Value, int, float]",
+                        "the return is not annotated as a value, thunk, or output dictionary"
                     )
-            name = func.__name__
-            assert name not in self.thunk_functions
-            self.thunk_functions[name] = tf
-            tf._check_output_sig()
-            return tf
+                if ret == OutputDict and outputs is None:  # type: ignore
+                    e("the return is a MultiOutput, but there is no outputs")
+                tf = ThunkFn(f=func, outputs=outputs, n_anonymous=n_anonymous)
+                argspec = tf.sig()
+                if argspec.varargs is not None:
+                    e("there are varargs")
+                if argspec.varkw is not None:
+                    e("there are keyword args")
+                if argspec.defaults is not None:
+                    e("there are default arg values")
+                params = argspec.args
+                for p in params:
+                    if p not in func.__annotations__:
+                        e(f"the parameter `{p}` is not annotated")
+                    if func.__annotations__[p] not in [str, Value, int, float]:
+                        e(
+                            f"the parameter `{p}` has unacceptable type",
+                            "the acceptable types are: [str, Value, int, float]",
+                        )
+                name = func.__name__
+                assert name not in self.thunk_functions
+                self.thunk_functions[name] = tf
+                tf._check_output_sig()
+                return tf
+            except PyggError as ee:
+                _print_exit(ee)
 
         return decorator_thunk_fn
 
@@ -624,20 +645,83 @@ class GGWorker(GG):
         self._install_value(v, bin_names(bin_))
 
     def main(self) -> None:
-        t_name = self.args[1]
-        t_args = self.args[2:]
-        f = self.thunk_functions[t_name]
-        t = Thunk.from_pgm_args(self, f, t_args)
-        if self.in_thunk:
-            raise IE("recursive thunk exec?!")
-        self.in_thunk = True
-        if f.n_anonymous is not None:
-            self.nOuputs = f.n_anonymous(*t.args)
-        result = t.exec()
-        self.in_thunk = False
-        self._save_output(result, DEFAULT_OUT)
-        for path in self.unused_outputs():
-            pathlib.Path(path).touch(exist_ok=False)
+        try:
+            t_name = self.args[1]
+            t_args = self.args[2:]
+            f = self.thunk_functions[t_name]
+            t = Thunk.from_pgm_args(self, f, t_args)
+            if self.in_thunk:
+                raise IE("recursive thunk exec?!")
+            self.in_thunk = True
+            if f.n_anonymous is not None:
+                self.nOuputs = f.n_anonymous(*t.args)
+            result = t.exec()
+            self.in_thunk = False
+            self._save_output(result, DEFAULT_OUT)
+            for path in self.unused_outputs():
+                pathlib.Path(path).touch(exist_ok=False)
+        except PyggError as e:
+            _print_exit(e)
+
+
+tty = os.isatty(sys.stderr.fileno())
+
+
+class Ansi:
+    BLACK = "\u001b[30m" if tty else ""
+    RED = "\u001b[31m" if tty else ""
+    GREEN = "\u001b[32m" if tty else ""
+    YELLOW = "\u001b[33m" if tty else ""
+    BLUE = "\u001b[34m" if tty else ""
+    MAGENTA = "\u001b[35m" if tty else ""
+    CYAN = "\u001b[36m" if tty else ""
+    WHITE = "\u001b[37m" if tty else ""
+    RESET = "\u001b[0m" if tty else ""
+    BOLD = "\u001b[1m" if tty else ""
+    UNDERLINE = "\u001b[4m" if tty else ""
+    REVERSED = "\u001b[7m" if tty else ""
+
+
+def _print_exit(e: Exception) -> NoReturn:
+    def _print_span(path: str, lineno: int, ctx: int, prefix: str) -> None:
+        i = lineno - 1
+        is_ = list(range(i - ctx, i + ctx + 1))
+        width = max(len(str(l + 1)) for l in is_)
+        with open(path) as f:
+            lines = list(it.islice(f, i + ctx + 1))[i - ctx : i + ctx + 1]
+        for (j, line) in zip(is_, lines):
+            print(prefix, file=sys.stderr, end="")
+            print(
+                "{}{{:{}d}}{}".format(Ansi.BLUE, width, Ansi.RESET).format(j + 1),
+                file=sys.stderr,
+                end="",
+            )
+            if i == j:
+                print(f"|{line}", file=sys.stderr, end="")
+            else:
+                print(f"|{Ansi.UNDERLINE}{line}{Ansi.RESET}", file=sys.stderr, end="")
+
+    MODULE = "<module>"
+    top = tb.extract_stack()
+    bot = tb.extract_tb(e.__traceback__)
+    whole = [f for f in it.chain(top, bot) if f.filename != __file__]
+    print(f"\n{Ansi.BOLD}Traceback{Ansi.RESET}:", file=sys.stderr)
+    last = False
+    for f in it.chain(top, bot):
+        if f.filename != __file__:
+            print(
+                f"  in file '{os.path.basename(f.filename)}', in function '{f.name}':",
+                file=sys.stderr,
+            )
+            _print_span(f.filename, f.lineno, 1, "    ")
+        elif last:
+            print(f"  ... frames in {os.path.basename(__file__)}", file=sys.stderr)
+        last = f.filename != __file__
+    print(
+        f"\n{Ansi.BOLD}{Ansi.RED}Error{Ansi.RESET}{Ansi.BOLD}:\n  {e}{Ansi.RESET}\n",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def bin_names(s: str) -> List[str]:
@@ -694,11 +778,14 @@ class GGCoordinator(GG):
         self._install_value(v, bin_names(path))
 
     def main(self) -> None:
-        t_name = self.args[1]
-        t_args = self.args[2:]
-        f = self.thunk_functions[t_name]
-        t = Thunk.from_pgm_args(self, f, t_args)
-        self._save(t, DEFAULT_OUT)
+        try:
+            t_name = self.args[1]
+            t_args = self.args[2:]
+            f = self.thunk_functions[t_name]
+            t = Thunk.from_pgm_args(self, f, t_args)
+            self._save(t, DEFAULT_OUT)
+        except PyggError as e:
+            _print_exit(e)
 
 
 def init() -> GG:
