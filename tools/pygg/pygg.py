@@ -211,7 +211,7 @@ class ThunkFn(NamedTuple):
         return self.f(*args)
 
 
-def arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
+def _arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
     """ Interprets the thunk argument `arg` as `ex_type`.
     For primitives, this is just a parse.
     For a value, this interprets `arg` as a path """
@@ -233,13 +233,13 @@ class Thunk:
     executable: bool
 
     @classmethod
-    def from_pgm_args(cls, gg: "GG", f: ThunkFn, str_args: List[str]) -> "Thunk":
+    def _from_pgm_args(cls, gg: "GG", f: ThunkFn, str_args: List[str]) -> "Thunk":
         tys = f.f.__annotations__
         fargs = f._sig().args
         args = []
         for farg, str_arg in zip(fargs, str_args):
             ex_type = tys[farg]
-            args.append(arg_decode(gg, str_arg, ex_type))
+            args.append(_arg_decode(gg, str_arg, ex_type))
         return cls(f, args, gg)
 
     def __init__(self, f: ThunkFn, args: Sequence[ActualArg], gg: "GG"):
@@ -277,7 +277,7 @@ class Thunk:
                     )
             self.args.append(arg)
 
-    def exec(self) -> MultiOutput:
+    def _exec(self) -> MultiOutput:
         assert self.executable
         r = self.f.f(*self.args)
         n = self.f.f.__name__
@@ -303,7 +303,7 @@ class Thunk:
     def __repr__(self) -> str:
         return f"Thunk {self.f.f.__name__}({', '.join(str(a) for a in self.args)})"
 
-    def default_output(self) -> "ThunkOutput":
+    def _default_output(self) -> "ThunkOutput":
         return ThunkOutput(thunk=self, filename=None)
 
     def __getitem__(self, filename: str) -> "ThunkOutput":
@@ -320,22 +320,22 @@ class ThunkOutput(NamedTuple):
     filename: Optional[str]
 
 
-def hash_deref(h: Hash) -> str:
+def _hash_deref(h: Hash) -> str:
     return "@{GGHASH:%s}" % h
 
 
-def hash_tag(h: Hash, filename: Optional[str]) -> str:
+def _hash_tag(h: Hash, filename: Optional[str]) -> str:
     return h if filename is None else f"{h}#{filename}"
 
 
-def prim_enc(prim: Prim) -> str:
+def _prim_enc(prim: Prim) -> str:
     t = type(prim)
     if t not in GG_PRIM_TYS:
         _err(f"prim_end: Unacceptable type {t}. Acceptable types: {GG_PRIM_TYS}")
     return str(prim)
 
 
-def is_dynamic(path: str) -> bool:
+def _is_dynamic(path: str) -> bool:
     ldd_output = sub.check_output(["ldd", path]).decode()
     return "not a dynamic executable" in ldd_output
 
@@ -438,7 +438,7 @@ class GG:
         elif isinstance(term, Thunk):
             return self._save_thunk(term, dest_path)
         elif isinstance(term, ThunkOutput):
-            return hash_tag(self._save_thunk(term.thunk, dest_path), term.filename)
+            return _hash_tag(self._save_thunk(term.thunk, dest_path), term.filename)
         else:
             _err(f"Unknown type {type(term)}")
 
@@ -492,11 +492,11 @@ class GG:
                     "import_wrapper.py",
                     "--module",
                     MODULE_NAME,
-                    hash_deref(self.lib.hash()),
-                    hash_deref(self.script.hash()),
+                    _hash_deref(self.lib.hash()),
+                    _hash_deref(self.script.hash()),
                     "exec",
                 ],
-                map(hash_deref, bin_hashes),
+                map(_hash_deref, bin_hashes),
                 [name],
             )
         )
@@ -509,10 +509,10 @@ class GG:
         for fp, ap in zip(fparams, t.args):
             ex_type = t.f.f.__annotations__[fp]
             if ex_type in GG_PRIM_TYS:
-                cmd.append(prim_enc(ap))  # type: ignore
+                cmd.append(_prim_enc(ap))  # type: ignore
             elif ex_type == Value:
                 h = self._save(ap)
-                cmd.append(hash_deref(h))
+                cmd.append(_hash_deref(h))
                 if isinstance(ap, Value):
                     values.append(h)
                 elif isinstance(ap, Thunk) or isinstance(ap, ThunkOutput):
@@ -674,7 +674,7 @@ class GGWorker(GG):
             dest_path = self._next_output_file()
         return ["--output-path", dest_path]
 
-    def unused_outputs(self) -> Iterable[str]:
+    def _unused_outputs(self) -> Iterable[str]:
         return (f"{i:03}" for i in range(self.nextOutput, self.nOuputs))
 
     def install(self, bin_: str) -> None:
@@ -693,16 +693,16 @@ class GGWorker(GG):
             t_name = self.args[1]
             t_args = self.args[2:]
             f = self.thunk_functions[t_name]
-            t = Thunk.from_pgm_args(self, f, t_args)
+            t = Thunk._from_pgm_args(self, f, t_args)
             if self.in_thunk:
                 raise IE("recursive thunk exec?!")
             self.in_thunk = True
             if f.n_anonymous is not None:
                 self.nOuputs = f.n_anonymous(*t.args)
-            result = t.exec()
+            result = t._exec()
             self.in_thunk = False
             self._save_output(result, DEFAULT_OUT)
-            for path in self.unused_outputs():
+            for path in self._unused_outputs():
                 pathlib.Path(path).touch(exist_ok=False)
         except PyggError as e:
             _print_exit(e)
@@ -828,7 +828,7 @@ class GGCoordinator(GG):
             if t_name not in self.thunk_functions:
                 _err(f"Unknown thunk name: '{t_name}'")
             f = self.thunk_functions[t_name]
-            t = Thunk.from_pgm_args(self, f, t_args)
+            t = Thunk._from_pgm_args(self, f, t_args)
             self._save(t, DEFAULT_OUT)
         except PyggError as e:
             _print_exit(e)
