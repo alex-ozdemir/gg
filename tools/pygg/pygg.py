@@ -173,7 +173,7 @@ class ThunkFn(NamedTuple):
     outputs: Optional[Callable[..., List[str]]]
     n_anonymous: Optional[Callable[..., int]]
 
-    def sig(self) -> inspect.FullArgSpec:
+    def _sig(self) -> inspect.FullArgSpec:
         return inspect.getfullargspec(self.f)
 
     def named_outputs(self, gg: "GG", args: List[ActualArg]) -> Optional[List[str]]:
@@ -192,7 +192,7 @@ class ThunkFn(NamedTuple):
         def ty_sig(s: inspect.FullArgSpec) -> List[type]:
             return [s.annotations[fa] for fa in s.args]
 
-        f_sig = ty_sig(self.sig())
+        f_sig = ty_sig(self._sig())
         if self.outputs is None:
             return
         o_sig = inspect.getfullargspec(self.outputs)
@@ -235,7 +235,7 @@ class Thunk:
     @classmethod
     def from_pgm_args(cls, gg: "GG", f: ThunkFn, str_args: List[str]) -> "Thunk":
         tys = f.f.__annotations__
-        fargs = f.sig().args
+        fargs = f._sig().args
         args = []
         for farg, str_arg in zip(fargs, str_args):
             ex_type = tys[farg]
@@ -260,7 +260,7 @@ class Thunk:
             e(f"{n} is not a registered thunk function")
         if not isinstance(args, list):
             e(f"{args} is not a list")
-        fargs = f.sig().args
+        fargs = f._sig().args
         tys = f.f.__annotations__
         if len(fargs) != len(args):
             e(f"The number of arguments is incorrect")
@@ -503,7 +503,7 @@ class GG:
         executables = [self.import_wrapper.hash(), self.script.hash()] + bin_hashes
         thunks = []
         values = [self.lib.hash()]
-        fparams = t.f.sig().args
+        fparams = t.f._sig().args
         if len(t.args) != len(fparams):
             raise IE("The number of formal and actual params are not equal")
         for fp, ap in zip(fparams, t.args):
@@ -597,7 +597,7 @@ class GG:
                 if ret == OutputDict and outputs is None:  # type: ignore
                     e("the return is a MultiOutput, but there is no outputs")
                 tf = ThunkFn(f=func, outputs=outputs, n_anonymous=n_anonymous)
-                argspec = tf.sig()
+                argspec = tf._sig()
                 if argspec.varargs is not None:
                     e("there are varargs")
                 if argspec.varkw is not None:
