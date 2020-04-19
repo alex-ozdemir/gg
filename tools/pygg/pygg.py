@@ -697,9 +697,9 @@ def _print_exit(e: Exception) -> NoReturn:
                 end="",
             )
             if i == j:
-                print(f"|{line}", file=sys.stderr, end="")
+                print(f"|{Ansi.BOLD}{line}{Ansi.RESET}", file=sys.stderr, end="")
             else:
-                print(f"|{Ansi.UNDERLINE}{line}{Ansi.RESET}", file=sys.stderr, end="")
+                print(f"|{line}", file=sys.stderr, end="")
 
     MODULE = "<module>"
     top = tb.extract_stack()
@@ -708,7 +708,7 @@ def _print_exit(e: Exception) -> NoReturn:
     print(f"\n{Ansi.BOLD}Traceback{Ansi.RESET}:", file=sys.stderr)
     last = False
     for f in it.chain(top, bot):
-        if f.filename != __file__:
+        if f.filename != __file__ or "PYGG_FULL_TRACE" in os.environ:
             print(
                 f"  in file '{os.path.basename(f.filename)}', in function '{f.name}':",
                 file=sys.stderr,
@@ -781,6 +781,8 @@ class GGCoordinator(GG):
         try:
             t_name = self.args[1]
             t_args = self.args[2:]
+            if t_name not in self.thunk_functions:
+                _err(f"Unknown thunk name: '{t_name}'")
             f = self.thunk_functions[t_name]
             t = Thunk.from_pgm_args(self, f, t_args)
             self._save(t, DEFAULT_OUT)
