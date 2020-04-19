@@ -121,6 +121,7 @@ class Value:
         self.saved = saved
 
     def as_bytes(self) -> bytes:
+        """Get the content of the value, as bytes"""
         if self._bytes is None:
             assert self._path is not None, "No bytes nor path for this value..."
             with open(self._path, "rb") as f:
@@ -128,14 +129,19 @@ class Value:
         return self._bytes
 
     def as_str(self) -> str:
+        """Get the content of the value, as a string"""
         return self.as_bytes().decode()
 
     def path(self) -> str:
+        """Get the path of the value's file, as a string.
+        Raises a PyggError if the value does not have a path (e.g. if it had
+        just been created using str_value)."""
         if self._path is None:
             _err(f"Value {self} has no path: it has not been written to the filesystem")
         return self._path
 
     def hash(self) -> str:
+        """Get the hash of the value"""
         if self._hash is None:
             if self._path is not None:
                 self._hash = self._gg._hash_file(self._path)
@@ -371,6 +377,7 @@ class GG:
             _err(f"GG.{fn_name} can only be called {place} of a thunk function")
 
     def str_value(self, string: str) -> Value:
+        """Create a value from a string"""
         try:
             self._assert_thunk_fn("str_value", True)
             return self.bytes_value(string.encode())
@@ -378,6 +385,7 @@ class GG:
             _print_exit(e)
 
     def bytes_value(self, bytes_: bytes) -> Value:
+        """Create a value from a byte sequence"""
         try:
             self._assert_thunk_fn("bytes_value", True)
             return Value(self, None, None, bytes_, False)
@@ -385,6 +393,8 @@ class GG:
             _print_exit(e)
 
     def file_value(self, path: str, saved: bool = False) -> Value:
+        """Create a value from a file. Takes ownership of the file, so it
+        should not be manually removed after calling this."""
         try:
             self._assert_thunk_fn("file_value", True)
             return Value(self, path, None, None, saved)
@@ -392,6 +402,9 @@ class GG:
             _print_exit(e)
 
     def thunk(self, f: ThunkFn, *args: ActualArg) -> Thunk:
+        """Create a thunk from a function and its arguments.
+        The arguments should be of the right type, save that Thunks and
+        ThunkOutputs are substitutable for values."""
         try:
             self._assert_thunk_fn("thunk", True)
             return Thunk(f, list(args), self)
@@ -430,6 +443,10 @@ class GG:
             _err(f"Unknown type {type(term)}")
 
     def bin(self, name: str) -> Value:
+        """Returns the value corresponding to the installed binary, `name`
+        This name can be
+           * The exact path that the binary was installed using
+           * Just the basename"""
         try:
             if name not in self.bins:
                 _err(f"Unknown bin: {name}")
@@ -438,6 +455,8 @@ class GG:
             _print_exit(e)
 
     def install(self, cmd: str) -> None:
+        """Find a runnable binary, and installs it, making it accessible inside
+        thunks"""
         self._assert_thunk_fn("install", False)
         raise Exception("abstract")
 
@@ -544,6 +563,20 @@ class GG:
         outputs: Optional[Callable[..., List[str]]] = None,
         n_anonymous: Optional[Callable[..., int]] = None,
     ) -> Callable[[Callable], ThunkFn]:
+        f"""Decorator for turning a function into a thunk function.
+        The function must:
+            * Take primitives (int, float, bool, str) or Values
+            * Return a Output (Thunk or Value), or OutputDict (map from strings
+              to Outputs)
+        If it returns an OutputDict, the decorator must be passed an "outputs"
+        function, which takes the same arguments, does not read the values, and
+        returns a list of the output names (the keys in the OutputDict).
+
+        If the thunk creates more than {MAX_FANOUT} intermediate values or
+        thunks (those that are **not** directly returned), then it should have
+        an "n_anonymous" function that has the same signature as the "outputs"
+        function, and returns an upper bound on the number of intermediates.
+        """
         self._assert_thunk_fn("thunk_fn", False)
 
         def decorator_thunk_fn(func: Callable) -> ThunkFn:
@@ -552,6 +585,7 @@ class GG:
                 if note is not None:
                     m += f"\n\nNote: {note}"
                 _err(m)
+
             try:
                 if "return" not in func.__annotations__:
                     e("there is no annotated return")
@@ -590,6 +624,16 @@ class GG:
         return decorator_thunk_fn
 
     def main(self) -> None:
+        """Yield control flow to pygg.
+        Looks at the first argument to the program.
+        If that argument is "init", parses
+           <thunk_fn_name> [<thunk_fn_arguments> ...]
+        and creates a thunk for that invocation in the "out" file.
+
+        If that argument is "exec", parses
+           <thunk_fn_name> [<thunk_fn_arguments> ...]
+        and executes that thunk
+        """
         raise Exception("abstract")
 
 
@@ -791,6 +835,15 @@ class GGCoordinator(GG):
 
 
 def init() -> GG:
+    """
+    Initializes the GG environment.
+    Looks at the first argument to the program.
+    If that argument is "init", then it initilizes a "coordinator" GG
+    environment, which will keep track of the computation, and has a .gg
+    directory.
+    If that argument is "exec", then initializes a "worker" GG environment,
+    which allows a single step of the computation to be executed.
+    """
     args = [a for a in sys.argv]
     if len(args) < 2:
         _err("There must be at least one argument: (init or run)")
