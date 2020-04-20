@@ -56,7 +56,7 @@ it creates a file (`out`) containing a thunk for the `fib` function executed
 with `5` as an argument. That thunk can be forced (`gg-force out`) to evaluate
 it.
 
-## Functions
+## GG Types & Methods
 
 ### Top Level Functions
 
@@ -84,6 +84,45 @@ it.
   of `pygg.Output`, and are returnable from thunk functions.
   `GG.path_value(path)` takes ownership of the file. It should not be manually
   removed.
-* `Value.as_str()`, `Value.as_bytes()`, `Value.hash()` and `Value.path()` get
-  properties of a value. Values that have been created but not returned,
-  generally speaking, do not have paths yet.
+
+### Value Methods
+
+* `Value.as_str()`, `Value.as_bytes()` read the value's contents as a string
+   and bytes respectively.
+* `Value.hash()` gives the hash of the value.
+* `Value.path()` gives the path of a value, if it exits; values that have been
+  created but not returned, generally speaking, do not have paths yet.
+
+### Thunk Methods
+
+* `Thunk[ name ]` for a string, `name`, gives the output of the thunk called
+   "name". The result is of type `ThunkOutput`.
+
+## Where GG Types are Acceptable
+
+### Thunk Function Returns
+
+A thunk function may be annotated as returning:
+
+* A `Value`
+* A `Thunk`
+* An `Output`: a union of the two previous options
+* An `OutputDict`: a dictionary from strings (output names) to their
+   respective `Output`s.
+
+### Thunk Function Arguments
+
+A thunk function must have its arguments annotated. Their type may be:
+
+* A "primitive" (`float`, `int`, `bool`, `str`)
+* A `Value`
+
+If a thunk is initialized using `script.py init <thunk_fn> <args...>`, then
+these values will be parsed from `<args...>`, with values being taken as
+files.
+
+### Thunk invocation arguments
+
+When a thunk function is invoked as a thunk (`gg.thunk(thunk_fn, args...)`),
+`Thunk`s and `ThunkOutput`s can be provided in place of a `Value`. If a
+`Thunk` is provided, the default (first) output is used.
