@@ -153,14 +153,14 @@ class Value:
         return self._hash
 
 
-Prim = Union[str, int, float]
-GG_PRIM_TYS = [str, int, float]
+Prim = Union[str, int, float, bool]
+GG_PRIM_TYS = [str, int, float, bool]
 
 FormalArg = Union[Prim, Value]
-FORMAL_ARG_TYS = [str, int, float, Value]
+FORMAL_ARG_TYS = [str, int, float, bool, Value]
 
 ActualArg = Union[Prim, Value, "Thunk", "ThunkOutput"]
-ACTUAL_ARG_TYS = [str, int, float, Value, "Thunk", "ThunkOutput"]
+ACTUAL_ARG_TYS = [str, int, float, bool, Value, "Thunk", "ThunkOutput"]
 
 Output = Union[Value, "Thunk"]
 OUTPUT_TYS = [Value, "Thunk"]
@@ -565,7 +565,7 @@ class GG:
     ) -> Callable[[Callable], ThunkFn]:
         f"""Decorator for turning a function into a thunk function.
         The function must:
-            * Take primitives (int, float, bool, str) or Values
+            * Take primitives {GG_PRIM_TYS} or Values
             * Return a Output (Thunk or Value), or OutputDict (map from strings
               to Outputs)
         If it returns an OutputDict, the decorator must be passed an "outputs"
@@ -608,10 +608,10 @@ class GG:
                 for p in params:
                     if p not in func.__annotations__:
                         e(f"the parameter `{p}` is not annotated")
-                    if func.__annotations__[p] not in [str, Value, int, float]:
+                    if func.__annotations__[p] not in FORMAL_ARG_TYS:
                         e(
                             f"the parameter `{p}` has unacceptable type",
-                            "the acceptable types are: [str, Value, int, float]",
+                            f"the acceptable types are: {FORMAL_ARG_TYS}",
                         )
                 name = func.__name__
                 assert name not in self.thunk_functions
