@@ -7,6 +7,7 @@ from typing import (
     Callable,
     NamedTuple,
     Dict,
+    Mapping,
     Iterable,
     BinaryIO,
     TypeVar,
@@ -30,6 +31,7 @@ import traceback as tb
 import enum
 import re
 
+
 SHEBANG_RE = "^#! */usr/bin/env +python3.7"
 
 MODULE_NAME = "pygg"
@@ -38,6 +40,7 @@ IMPORT_WRAPPER_HASH_ENVVAR = "IMPORT_WRAPPER_HASH"
 SCRIPT_NAME_ENVVAR = "SCRIPT_NAME_ENVVAR"
 DEFAULT_OUT = "out"
 REQUIRED_BINS = ["gg-create-thunk-static", "gg-hash-static"]
+GG_OUTPUT_DIR = "anonymous_outputs"
 
 Hash = str
 
@@ -164,14 +167,13 @@ ACTUAL_ARG_TYS = [str, int, float, bool, Value, "Thunk", "ThunkOutput"]
 
 Output = Union[Value, "Thunk"]
 OUTPUT_TYS = [Value, "Thunk"]
-OutputDict = Dict[str, Output]
+OutputDict = Mapping[str, Output]
 MultiOutput = Union[Value, "Thunk", OutputDict]
 
 
 class ThunkFn(NamedTuple):
     f: Callable[..., MultiOutput]
     outputs: Optional[Callable[..., List[str]]]
-    n_anonymous: Optional[Callable[..., int]]
 
     def _sig(self) -> inspect.FullArgSpec:
         return inspect.getfullargspec(self.f)
@@ -414,7 +416,7 @@ class GG:
     def _save_output(
         self, output: MultiOutput, dest_path: Optional[str] = None
     ) -> None:
-        if isinstance(output, dict):
+        if isinstance(output, Mapping):
             for name, t in output.items():
                 if not isinstance(name, str):
                     _err(f"The key {name} of {output} is not a string")
@@ -527,8 +529,6 @@ class GG:
             outputs.append(DEFAULT_OUT)
         else:
             outputs.extend(op)
-        n_anon = t.f.n_anonymous(*t.args) if t.f.n_anonymous is not None else MAX_FANOUT
-        outputs += list(f"{i:03d}" for i in range(n_anon))
         value_args = it.chain.from_iterable(["--value", v] for v in values)
         thunk_args = it.chain.from_iterable(["--thunk", v] for v in thunks)
         output_args = it.chain.from_iterable(["--output", v] for v in outputs)
@@ -545,6 +545,7 @@ class GG:
         cmd_args = list(
             it.chain(
                 [self.bin("gg-create-thunk-static").path()],
+                ["--output-dir", GG_OUTPUT_DIR],
                 value_args,
                 thunk_args,
                 output_args,
@@ -561,7 +562,6 @@ class GG:
     def thunk_fn(
         self,
         outputs: Optional[Callable[..., List[str]]] = None,
-        n_anonymous: Optional[Callable[..., int]] = None,
     ) -> Callable[[Callable], ThunkFn]:
         f"""Decorator for turning a function into a thunk function.
         The function must:
@@ -596,7 +596,7 @@ class GG:
                     )
                 if ret == OutputDict and outputs is None:  # type: ignore
                     e("the return is a MultiOutput, but there is no outputs")
-                tf = ThunkFn(f=func, outputs=outputs, n_anonymous=n_anonymous)
+                tf = ThunkFn(f=func, outputs=outputs)
                 argspec = tf._sig()
                 if argspec.varargs is not None:
                     e("there are varargs")
@@ -639,7 +639,6 @@ class GG:
 
 class GGWorker(GG):
     nextOutput: int
-    nOuputs: int
 
     def __init__(self, args: List[str]) -> None:
         script = Value(self, script_path, None, None, True)
@@ -647,13 +646,10 @@ class GGWorker(GG):
         iw = Value(self, None, IMPORT_WRAPPER_HASH, None, True)
         super().__init__(lib, script, iw, args)
         self.nextOutput = 0
-        self.nOuputs = MAX_FANOUT
 
     def _next_output_file(self) -> str:
         self.nextOutput += 1
-        if self.nextOutput > self.nOuputs:
-            _err("anonymous output allocation exceeded")
-        return f"{self.nextOutput - 1:03d}"
+        return f"{GG_OUTPUT_DIR}/{self.nextOutput - 1:03d}"
 
     def _save_bytes(self, data: bytes, dest_path: Optional[str]) -> Hash:
         if dest_path is None:
@@ -673,9 +669,6 @@ class GGWorker(GG):
         if dest_path is None:
             dest_path = self._next_output_file()
         return ["--output-path", dest_path]
-
-    def _unused_outputs(self) -> Iterable[str]:
-        return (f"{i:03}" for i in range(self.nextOutput, self.nOuputs))
 
     def install(self, bin_: str) -> None:
         next_bin_idx = 1
@@ -697,13 +690,10 @@ class GGWorker(GG):
             if self.in_thunk:
                 raise IE("recursive thunk exec?!")
             self.in_thunk = True
-            if f.n_anonymous is not None:
-                self.nOuputs = f.n_anonymous(*t.args)
+            os.mkdir(GG_OUTPUT_DIR)
             result = t._exec()
             self.in_thunk = False
             self._save_output(result, DEFAULT_OUT)
-            for path in self._unused_outputs():
-                pathlib.Path(path).touch(exist_ok=False)
         except PyggError as e:
             _print_exit(e)
 

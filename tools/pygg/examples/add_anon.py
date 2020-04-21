@@ -16,7 +16,7 @@ def add(n: int, m: int) -> pygg.Output:
 def add_anon(_n: pygg.Value, m: int) -> int:
     return m
 
-@gg.thunk_fn(n_anonymous = add_anon)
+@gg.thunk_fn()
 def add_(n: pygg.Value, m: int) -> pygg.Output:
     for _ in range(m):
         n = gg.thunk(inc, n) #type: ignore
