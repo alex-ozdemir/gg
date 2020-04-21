@@ -24,6 +24,7 @@ void usage( const char * argv0 )
        << "\t[--future, -f <future[=name]>]..." << endl
        << "\t[--executable, -e <executable[=name]>]..." << endl
        << "\t[--output, -o <tag>]..." << endl
+       << "\t[--output-dir, -d <dirname>]..." << endl
        << "\t[--placeholder, -C <arg>]" << endl
        << "\t[--timeout, -T <arg (ms)>]" << endl
        << "\t[--output-path, -p <path>]" << endl
@@ -49,6 +50,7 @@ int main( int argc, char * argv[] )
       { "future",      required_argument, nullptr, 'f' },
       { "executable",  required_argument, nullptr, 'e' },
       { "output",      required_argument, nullptr, 'o' },
+      { "output-dir",  required_argument, nullptr, 'd' },
       { "placeholder", required_argument, nullptr, 'C' },
       { "timeout",     required_argument, nullptr, 'T' },
       { "output-path", required_argument, nullptr, 'p' },
@@ -65,10 +67,11 @@ int main( int argc, char * argv[] )
     vector<Thunk::DataItem> futures;
     vector<Thunk::DataItem> executables;
     vector<string> outputs;
+    Optional<string> output_dir;
     milliseconds timeout = 0s;
 
     while ( true ) {
-      const int opt = getopt_long( argc, argv, "E:v:t:e:o:C:T:f:p:", cmd_options, nullptr );
+      const int opt = getopt_long( argc, argv, "E:v:t:e:d:o:C:T:f:p:", cmd_options, nullptr );
 
       if ( opt == -1 ) { break; }
 
@@ -95,6 +98,10 @@ int main( int argc, char * argv[] )
 
       case 'o':
         outputs.emplace_back( optarg );
+        break;
+
+      case 'd':
+        output_dir = string( optarg );
         break;
 
       case 'C':
@@ -129,7 +136,7 @@ int main( int argc, char * argv[] )
                         move( function_envars ) };
 
     Thunk thunk { move( function ), move( values ), move( thunks ),
-                  move( executables ), move( outputs ), move( futures ) };
+                  move( executables ), move( outputs ), move( futures ), move( output_dir ) };
 
     thunk.set_timeout( timeout );
 

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include <memory>
 #include <sys/fcntl.h>
 #include <getopt.h>
@@ -156,6 +157,46 @@ vector<string> execute_thunk( const Thunk & original_thunk )
         gg::cache::insert( thunk.hash(), outfile_hash );
       }
     }
+  }
+
+  if ( thunk.output_dir().initialized() ) {
+    const roost::path output_dir = exec_dir_path / roost::path(thunk.output_dir().get());
+    if ( not roost::exists( output_dir ) ) {
+      ostringstream msg;
+      msg << "`" << output_dir.string()
+          << "` is declared as the output directory, "
+          << "but it does not exist";
+      throw runtime_error( msg.str() );
+    }
+    if ( not roost::is_directory( output_dir ) ) {
+      ostringstream msg;
+      msg << "`" << output_dir.string()
+          << "` is declared as the output directory, "
+          << "but it is not a directory";
+      throw runtime_error( msg.str() );
+    }
+    for ( const string filename : roost::list_directory( output_dir ) ) {
+      if ( filename == "." or filename == ".." ) continue;
+      const auto f = (output_dir / roost::path( filename ));
+      if ( is_directory( f ) ) {
+        ostringstream msg;
+        msg << "Found a directory instead of a file at " << f.string();
+        throw runtime_error(msg.str());
+      }
+
+      string outfile_hash = gg::hash::file( f );
+      roost::path outfile_gg = gg::paths::blob( outfile_hash );
+
+      if ( not roost::exists( outfile_gg ) ) {
+        roost::move_file( f, outfile_gg );
+      } else {
+        roost::remove( f );
+      }
+
+      gg::cache::insert( thunk.output_hash( filename ), outfile_hash );
+    }
+
+    roost::remove( output_dir );
   }
 
   try {

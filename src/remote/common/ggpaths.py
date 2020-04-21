@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import glob
 
 GG_DIR = os.environ.get('GG_DIR')
 
@@ -42,6 +43,12 @@ class GGCache:
             data = fin.read()
             data = data.split(" ")
             return data[0]
+
+    @staticmethod
+    def outputs(thunk_hash):
+        """ Given a thunk hash, return a list of all output tags in the cache """
+        key = thunk_hash
+        return [p[p.find("#") + 1:] for p in glob.glob(f"{GGPaths.reduction_path(key)}#*")]
 
     @classmethod
     def insert(cls, old_hash, new_hash):

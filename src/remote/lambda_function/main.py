@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.7
 
+import itertools as it
 import os
 import sys
 import time
@@ -89,7 +90,11 @@ def handler(event, context):
     for thunk in thunks:
         outputs = []
 
-        for output_tag in thunk['outputs']:
+        tags = thunk['outputs']
+        tag_set = set(tags)
+        glob_tags = [t for t in GGCache.outputs(thunk['hash']) if t not in tag_set]
+
+        for output_tag in it.chain(tags, glob_tags):
             output_hash = GGCache.check(thunk['hash'], output_tag)
 
             if not output_hash:

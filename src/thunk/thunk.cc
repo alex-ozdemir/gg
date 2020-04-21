@@ -69,13 +69,15 @@ Thunk::Thunk( const Function & function,
               const vector<DataItem> & data,
               const vector<DataItem> & executables,
               const vector<string> & outputs,
-              const vector<DataItem> & futures )
+              const vector<DataItem> & futures,
+              const Optional<string> & output_dir )
   : function_( function ),
     values_(),
     thunks_(),
     futures_(),
     executables_( executables.cbegin(), executables.cend() ),
-    outputs_( outputs )
+    outputs_( outputs ),
+    output_dir_( output_dir )
 {
   for ( const DataItem & item : data ) {
     switch ( hash::type( item.first ) ) {
@@ -95,9 +97,11 @@ Thunk::Thunk( Function && function,
               vector<DataItem> && data,
               vector<DataItem> && executables,
               vector<string> && outputs,
-              vector<DataItem> && futures )
+              vector<DataItem> && futures,
+              Optional<string> && output_dir )
   : function_( move( function ) ), values_(), thunks_(), futures_(),
-    executables_(), outputs_( move( outputs ) )
+    executables_(), outputs_( move( outputs ) ),
+    output_dir_( move ( output_dir ) )
 {
   for ( DataItem & item : data ) {
     switch ( hash::type( item.first ) ) {
@@ -122,9 +126,11 @@ Thunk::Thunk( Function && function,
               vector<DataItem> && thunks,
               vector<DataItem> && executables,
               vector<string> && outputs,
-              vector<DataItem> && futures )
+              vector<DataItem> && futures,
+              Optional<string> && output_dir )
   : function_( move( function ) ), values_(), thunks_(), futures_(),
-    executables_(), outputs_( move( outputs ) )
+    executables_(), outputs_( move( outputs ) ),
+    output_dir_( move( output_dir ) )
 {
   for ( DataItem & item : values ) {
     values_.emplace( move( item ) );
@@ -147,10 +153,12 @@ Thunk::Thunk( Function && function,
 
 Thunk::Thunk( Function && function, DataList && values,
               DataList && thunks, DataList && executables,
-              vector<string> && outputs, DataList && futures )
+              vector<string> && outputs, DataList && futures,
+              Optional<string> && output_dir )
   : function_( move( function ) ), values_( move( values ) ),
     thunks_( move( thunks ) ), futures_( move( futures ) ),
-    executables_( move( executables ) ), outputs_( move( outputs ) )
+    executables_( move( executables ) ), outputs_( move( outputs ) ),
+    output_dir_( move( output_dir ) )
 {
   throw_if_error();
 }
@@ -162,7 +170,8 @@ Thunk::Thunk( const gg::protobuf::Thunk & thunk_proto )
     futures_(),
     executables_(),
     outputs_( thunk_proto.outputs().cbegin(), thunk_proto.outputs().cend() ),
-    timeout_( thunk_proto.timeout() )
+    timeout_( thunk_proto.timeout() ),
+    output_dir_()
 {
   for ( const string & item : thunk_proto.values() ) {
     values_.emplace( string_to_data( item ) );
@@ -178,6 +187,10 @@ Thunk::Thunk( const gg::protobuf::Thunk & thunk_proto )
 
   for ( const string & item : thunk_proto.executables() ) {
     executables_.emplace( string_to_data( item ) );
+  }
+
+  if ( thunk_proto.output_dir().size() ) {
+    output_dir_ = string(thunk_proto.output_dir());
   }
 
   throw_if_error();
@@ -298,6 +311,8 @@ protobuf::Thunk Thunk::to_protobuf() const
   for ( const auto & h : futures_ ) { thunk_proto.add_futures( data_to_string( h ) ); }
   for ( const auto & h : executables_ ) { thunk_proto.add_executables( data_to_string( h ) ); }
   for ( const string & output : outputs_ ) { thunk_proto.add_outputs( output ); }
+
+  thunk_proto.set_output_dir( output_dir_.get_or("") );
 
   thunk_proto.set_timeout( timeout_.count() );
 

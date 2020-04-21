@@ -101,6 +101,7 @@ namespace gg {
       DataList executables_;
       std::vector<std::string> outputs_;
       std::chrono::milliseconds timeout_ { 0 };
+      Optional<std::string> output_dir_;
 
       mutable Optional<std::string> hash_ {};
 
@@ -111,25 +112,29 @@ namespace gg {
              const std::vector<DataItem> & data,
              const std::vector<DataItem> & executables,
              const std::vector<std::string> & outputs,
-             const std::vector<DataItem> & futures = {} );
+             const std::vector<DataItem> & futures = {},
+             const Optional<std::string> & output_dir = {} );
 
       Thunk( Function && function,
              std::vector<DataItem> && data,
              std::vector<DataItem> && executables,
              std::vector<std::string> && outputs,
-             std::vector<DataItem> && futures = {} );
+             std::vector<DataItem> && futures = {},
+             Optional<std::string> && output_dir = {} );
 
       Thunk( Function && function,
              std::vector<DataItem> && values,
              std::vector<DataItem> && thunks,
              std::vector<DataItem> && executables,
              std::vector<std::string> && outputs,
-             std::vector<DataItem> && futures = {} );
+             std::vector<DataItem> && futures = {},
+             Optional<std::string> && output_dir = {} );
 
       Thunk( Function && function, DataList && values,
              DataList && thunks,
              DataList && executables, std::vector<std::string> && outputs,
-             DataList && futures = {} );
+             DataList && futures = {},
+             Optional<std::string> && output_dir = {} );
 
       Thunk( const gg::protobuf::Thunk & thunk_proto );
 
@@ -145,6 +150,7 @@ namespace gg {
       const DataList & futures() const { return futures_; }
       const DataList & executables() const { return executables_; }
       const std::vector<std::string> & outputs() const { return outputs_; }
+      Optional<std::string> output_dir() const { return output_dir_; }
       const std::chrono::milliseconds & timeout() const { return timeout_; }
 
       void set_timeout( const std::chrono::milliseconds & timeout );

@@ -13,6 +13,7 @@ message Thunk {
   repeated string values = 2;
   repeated string thunks = 3;
   repeated string futures = 7;
+  string output_dir = 8;
   repeated string executables = 4;
   repeated string outputs = 5;
   uint32 timeout = 6;
