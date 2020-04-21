@@ -24,7 +24,11 @@ UniqueDirectory::UniqueDirectory( const string & dirname_template )
 /* unlike UniqueDirectory, a TempDirectory is deleted when object destroyed */
 TempDirectory::~TempDirectory()
 {
-  remove();
+  try {
+    remove();
+  } catch (unix_error & e) {
+    cerr << "Warning: " << e.what() << endl;
+  }
 }
 
 void TempDirectory::remove()
