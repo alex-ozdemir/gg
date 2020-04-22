@@ -35,7 +35,6 @@ import re
 SHEBANG_RE = "^#! */usr/bin/env +python3.7"
 
 MODULE_NAME = "pygg"
-MAX_FANOUT = 10
 IMPORT_WRAPPER_HASH_ENVVAR = "IMPORT_WRAPPER_HASH"
 SCRIPT_NAME_ENVVAR = "SCRIPT_NAME_ENVVAR"
 DEFAULT_OUT = "out"
@@ -612,11 +611,6 @@ class GG:
         If it returns an OutputDict, the decorator must be passed an "outputs"
         function, which takes the same arguments, does not read the values, and
         returns a list of the output names (the keys in the OutputDict).
-
-        If the thunk creates more than {MAX_FANOUT} intermediate values or
-        thunks (those that are **not** directly returned), then it should have
-        an "n_anonymous" function that has the same signature as the "outputs"
-        function, and returns an upper bound on the number of intermediates.
         """
         self._assert_thunk_fn("thunk_fn", False)
 
