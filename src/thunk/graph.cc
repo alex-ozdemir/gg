@@ -396,10 +396,17 @@ ExecutionGraph::submit_reduction( const Hash & from,
     return {};
   }
 
-  // If this reduction is for an out-of-date thunk, ignore it
   ComputationId id = ids_.at( from );
   if ( verbose ) cerr << "  id " << id << endl;
+
+  // We've cancelled this computation.
+  if ( computations_.count( id ) == 0 ) {
+    if ( verbose ) cerr << " discarding update: comptutation removed" << endl;
+    return {};
+  }
+
   Computation & computation = computations_.at( id );
+  // If this reduction is for an out-of-date thunk, ignore it
   if ( not computation.is_reducible_from_hash( from ) ) {
     if ( verbose ) cerr << " discarding update: old" << endl;
     return {};
