@@ -54,6 +54,7 @@ int main( int argc, char * argv[] )
       { "placeholder", required_argument, nullptr, 'C' },
       { "timeout",     required_argument, nullptr, 'T' },
       { "output-path", required_argument, nullptr, 'p' },
+      { "help",        no_argument,       nullptr, 'h' },
       { nullptr, 0, nullptr, 0 }
     };
 
@@ -115,6 +116,10 @@ int main( int argc, char * argv[] )
       case 'T':
         timeout = milliseconds { stoul( optarg ) };
         break;
+
+      case 'h':
+        usage( argv[ 0 ] );
+        return EXIT_FAILURE;
 
       default:
         throw runtime_error( "invalid option" );
