@@ -180,8 +180,10 @@ IdSet ExecutionGraph::_update( const ComputationId id )
           _erase_dependency( id, child_id );
         } else {
           string new_hash = child.thunk.hash();
-          computation.thunk.update_data( old_hash, { { new_hash, "" } } );
-          computation.dep_hashes[ child_id ] = new_hash;
+          if (old_hash != new_hash) {
+            computation.thunk.update_data( old_hash, { { new_hash, "" } } );
+            computation.dep_hashes[ child_id ] = new_hash;
+          }
         }
       }
 

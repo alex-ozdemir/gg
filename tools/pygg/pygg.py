@@ -88,6 +88,13 @@ def _gg_hash(data: bytes, tag: str) -> Hash:
     )
     return f"{tag}{h}{len(data):08x}"
 
+def _contains_thunk(path: str) -> bool:
+    b = os.path.basename(path)
+    if b[0] == "T" and len(b) == len("TI8oBoUKMAy5zKE6eLKutVStu.8U4krg.fclymPkZBgs00000322"):
+        return True
+    with open(path, "rb") as f:
+        return f.readline(20).startswith(b"##GGTHUNK##")
+
 
 if SCRIPT_NAME_ENVVAR not in os.environ:
     os.environ[SCRIPT_NAME_ENVVAR] = os.path.basename(script_path)
@@ -159,11 +166,11 @@ class Value:
 Prim = Union[str, int, float, bool]
 GG_PRIM_TYS = [str, int, float, bool]
 
-FormalArg = Union[Prim, Value]
-FORMAL_ARG_TYS = [str, int, float, bool, Value]
+FormalArg = Union[Prim, Value, Optional[Value]]
+FORMAL_ARG_TYS = [str, int, float, bool, Value, Optional[Value]]
 
-ActualArg = Union[Prim, Value, "Thunk", "ThunkOutput"]
-ACTUAL_ARG_TYS = [str, int, float, bool, Value, "Thunk", "ThunkOutput"]
+ActualArg = Union[Prim, Value, Optional[Value], "Thunk", "ThunkOutput"]
+ACTUAL_ARG_TYS = [str, int, float, bool, Value, Optional[Value], "Thunk", "ThunkOutput"]
 
 Output = Union[Value, "Thunk"]
 OUTPUT_TYS = [Value, "Thunk"]
@@ -219,6 +226,12 @@ def _arg_decode(gg: "GG", arg: str, ex_type: type) -> FormalArg:
     For a value, this interprets `arg` as a path """
     if ex_type in GG_PRIM_TYS:
         return ex_type(arg)
+    elif ex_type == Optional[Value]:
+        if _contains_thunk(arg):
+            return None
+        else:
+            gg._collect(arg)
+            return Value(gg, arg, None, None, True)
     elif ex_type == Value:
         gg._collect(arg)
         return Value(gg, arg, None, None, True)
@@ -268,9 +281,19 @@ class Thunk:
             e(f"The number of arguments is incorrect")
         for farg, arg in zip(fargs, args):
             ex_type = tys[farg]
-            if not isinstance(arg, ex_type):
+            if ex_type == Value or ex_type == Optional[Value]:
+                if isinstance(arg, Thunk) or isinstance(arg, ThunkOutput):
+                    self.executable = False
+                elif isinstance(arg, Value):
+                    pass
+                elif ex_type == Optional[Value] and arg == None:
+                    pass
+                else:
+                    e(
+                        f"The actual argument {arg} should have type {tys[farg]} but has type {type(arg)}"
+                    )
+            elif not isinstance(arg, ex_type):
                 if (
-                    isinstance(arg, Thunk) or isinstance(arg, ThunkOutput)
                 ) and ex_type == Value:
                     self.executable = False
                 else:
@@ -413,6 +436,12 @@ class GG:
         except PyggError as e:
             _print_exit(e)
 
+    def this(self) -> Output:
+        """Returns exactly this thunk, used to indicate that this form is
+        (non-recursively) irreducible"""
+        this_hash = os.environ['__GG_THUNK_HASH__']
+        return Value(self, None, this_hash, None, True)
+
     def _save_output(
         self, output: MultiOutput, dest_path: Optional[str] = None
     ) -> None:
@@ -428,7 +457,11 @@ class GG:
         if isinstance(term, Value):
             p = term._path
             if term.saved:
-                return term.hash()
+                h = term.hash()
+                if dest_path is not None and p != dest_path:
+                    gg_dir = os.environ['__GG_DIR__']
+                    sh.copy(f"{gg_dir}/{h}", dest_path)
+                return h
             if p is None:
                 ret = self._save_bytes(term.as_bytes(), dest_path)
             else:
@@ -504,6 +537,7 @@ class GG:
         )
         executables = [self.import_wrapper.hash(), self.script.hash()] + bin_hashes
         thunks = []
+        futures = []
         values = [self.lib.hash()]
         fparams = t.f._sig().args
         if len(t.args) != len(fparams):
@@ -512,13 +546,16 @@ class GG:
             ex_type = t.f.f.__annotations__[fp]
             if ex_type in GG_PRIM_TYS:
                 cmd.append(_prim_enc(ap))  # type: ignore
-            elif ex_type == Value:
+            elif ex_type == Value or ex_type == Optional[Value]:
                 h = self._save(ap)
                 cmd.append(_hash_deref(h))
                 if isinstance(ap, Value):
                     values.append(h)
                 elif isinstance(ap, Thunk) or isinstance(ap, ThunkOutput):
-                    thunks.append(h)
+                    if ex_type == Value:
+                        thunks.append(h)
+                    else:
+                        futures.append(h)
                 else:
                     _unreach()
             else:
@@ -531,6 +568,7 @@ class GG:
             outputs.extend(op)
         value_args = it.chain.from_iterable(["--value", v] for v in values)
         thunk_args = it.chain.from_iterable(["--thunk", v] for v in thunks)
+        future_args = it.chain.from_iterable(["--future", v] for v in futures)
         output_args = it.chain.from_iterable(["--output", v] for v in outputs)
         exec_args = it.chain.from_iterable(["--executable", v] for v in executables)
         env_additions = {
@@ -538,6 +576,8 @@ class GG:
             IMPORT_WRAPPER_HASH_ENVVAR: IMPORT_WRAPPER_HASH,
             SCRIPT_NAME_ENVVAR: os.environ[SCRIPT_NAME_ENVVAR],
         }
+        if "PYGG_FULL_TRACE" in os.environ:
+            env_additions["PYGG_FULL_TRACE"] = "1"
         env_args = it.chain.from_iterable(
             ["--envar", f"{k}={v}"] for k, v in env_additions.items()
         )
@@ -548,6 +588,7 @@ class GG:
                 ["--output-dir", GG_OUTPUT_DIR],
                 value_args,
                 thunk_args,
+                future_args,
                 output_args,
                 exec_args,
                 loc_args,
