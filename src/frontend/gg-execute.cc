@@ -194,6 +194,7 @@ vector<string> execute_thunk( const Thunk & original_thunk )
       }
 
       gg::cache::insert( thunk.output_hash( filename ), outfile_hash );
+      output_hashes.emplace_back( outfile_hash );
     }
 
     roost::remove( output_dir );
