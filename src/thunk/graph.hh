@@ -90,8 +90,8 @@ private:
 
   // Given a computation `id`, ensures that said `id` either:
   //    * refers to a value OR
-  //    * refers to an up-to-date computation (one with a thunk that reflects
-  //    the current comptution)
+  //    * refers to a link to a thunk OR
+  //    * refers to an up-to-date thunk (that has its hash in the hash index)
   // Returns any newly-executable thunks.
   IdSet _update( const ComputationId id );
 

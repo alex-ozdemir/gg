@@ -46,7 +46,7 @@ ExecutionGraph::add_thunk( const Hash & full_hash )
   const auto retval = add_thunk_common( full_hash );
   if ( verbose ) {
       for ( const auto & o1 : retval.second ) {
-        cerr << "  exec " << ids_[o1] << " as " << o1 << endl;
+        cerr << "  exec " << ids_.at( o1 ) << " as " << o1 << endl;
       }
   }
   return retval;
@@ -68,7 +68,7 @@ ExecutionGraph::add_thunk_common( const Hash & full_hash )
 
   // If hash is present, we're done
   if ( ids_.count( hash ) ) {
-    if ( verbose ) cerr << "  duplicate" << endl;
+    if ( verbose ) cerr << "  duplicate: " << ids_.at( hash ) << endl;
     return { ids_.at( hash ), {} };
   }
 
@@ -114,9 +114,7 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
     _update( target_id );
     _create_dependency( id, hash, target_id );
   } else {
-    // If we do not, record the hash
-    ids_.insert( { move( hash ), id } );
-    // and add dependencies
+    // If not, add dependencies
     for ( const Thunk::DataItem & item : computation.thunk.thunks() ) {
       const string child_hash = gg::hash::base( item.first );
       const auto child_id_and_o1s = add_inner_thunk( child_hash );
@@ -134,12 +132,20 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
     }
   }
 
-  // Update our thunk
+  // Update our thunk (adds its new hash to the hash index)
   _update( id );
+
+  if ( verbose ) {
+    cerr << "  id: " << id << " deps: ";
+    for ( const auto & dep : computation.deps ) {
+      cerr << dep << " ";
+    }
+    cerr << endl;
+  }
+
   if ( computation.thunk.can_be_executed() ) {
     new_o1s.insert( computation.thunk.hash() );
     ThunkWriter::write( computation.thunk );
-    ids_[ computation.thunk.hash() ] = id;
   }
   return new_o1s;
 }
@@ -157,6 +163,8 @@ void ExecutionGraph::_mark_out_of_date( const ComputationId id )
 
 IdSet ExecutionGraph::_update( const ComputationId id )
 {
+  if ( verbose ) cerr << "      _update(" << id << ")" << endl;
+
   Computation & computation = computations_.at( id );
 
   if ( computation.up_to_date ) {
@@ -197,6 +205,8 @@ IdSet ExecutionGraph::_update( const ComputationId id )
         _create_dependency( id, hash, ids_.at( hash ) );
         IdSet r = _update( id );
         newly_executable.insert(r.begin(), r.end());
+      } else {
+        ids_.emplace( hash, id );
       }
       break;
     }
@@ -223,6 +233,16 @@ IdSet ExecutionGraph::_update( const ComputationId id )
       // empty
     }
   }
+
+  if ( verbose ) {
+    cerr << "      _update( " << id << ") end" << endl;
+    cerr << "      is thunk " << computation.is_thunk() << endl;
+    cerr << "      is link " << computation.is_link() << endl;
+    cerr << "      is value " << computation.is_value() << endl;
+    cerr << "      hash " << computation.thunk.hash() << endl;
+    cerr << "      is executable " << computation.thunk.can_be_executed() << endl;
+    ThunkWriter::write( computation.thunk );
+  }
   if ( computation.is_thunk() and computation.thunk.can_be_executed() ) {
     newly_executable.insert( id );
   }
@@ -237,30 +257,47 @@ ExecutionGraph::_update_parent_thunks( const ComputationId id )
   std::queue<ComputationId> to_update;
   IdSet updated;
   for ( const ComputationId parent_id : computations_.at( id ).rev_deps ) {
+    if ( verbose ) cerr << "    maybe update " << parent_id << endl;
     to_update.push( parent_id );
   }
   while ( not to_update.empty() ) {
     const ComputationId id = to_update.front();
     to_update.pop();
     Computation & computation = computations_.at( id );
+    if ( verbose ) cerr << "    check " << id << endl;
     switch ( computation.kind() )
     {
       case ComputationKind::LINK:
       {
+        if ( verbose ) cerr << "      is link " << endl;
         IdSet r =_update( id );
+        if ( verbose ) {
+          for ( const ComputationId parent_id : r) {
+            cerr << "    updated " << parent_id << endl;
+          }
+        }
         updated.insert(r.begin(), r.end());
         for ( const ComputationId parent_id : computation.rev_deps ) {
+          if ( verbose ) cerr << "    maybe update " << parent_id << endl;
           to_update.push( parent_id );
         }
         break;
       }
       case ComputationKind::THUNK:
       {
+        if ( verbose ) cerr << "      is thunk " << endl;
         if ( not computation.up_to_date ) {
-          IdSet r =_update( id );
+          if ( verbose ) cerr << "      out of date" << endl;
+          IdSet r = _update( id );
+          if ( verbose ) {
+            for ( const ComputationId parent_id : r) {
+              cerr << "    updated " << parent_id << endl;
+            }
+          }
           updated.insert(r.begin(), r.end());
           if ( not computation.is_thunk() ) {
             for ( const ComputationId parent_id : computation.rev_deps ) {
+              if ( verbose ) cerr << "    maybe update " << parent_id << endl;
               to_update.push( parent_id );
             }
           }
@@ -434,9 +471,10 @@ ExecutionGraph::submit_reduction( const Hash & from,
     unordered_set<ComputationId> newly_updated = _update_parent_thunks( id );
     for ( const ComputationId parent_id : newly_updated ) {
       Computation & parent = computations_.at( parent_id );
+      if ( verbose ) cerr << "  newly_updated " << parent_id << " " << parent.thunk.can_be_executed() << endl;
       if ( parent.thunk.can_be_executed() ) {
         // Make sure to record the hash and write the thunk before submitting
-        ids_[ parent.thunk.hash() ] = parent_id;
+        if ( verbose and ids_.count( parent.thunk.hash() ) and ids_.at( parent.thunk.hash() ) != parent_id ) cerr << "  hash already assigned to id " << ids_.at( parent.thunk.hash() )  << endl;
         ThunkWriter::write( parent.thunk );
         new_o1s.insert( parent.thunk.hash() );
       }
@@ -444,7 +482,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
   }
   if ( verbose ) {
     for ( const auto & o1 : new_o1s ) {
-      cerr << "  exec " << ids_[o1] << " as " << o1 << endl;
+      cerr << "  exec " << ids_.at( o1 ) << " as " << o1 << endl;
     }
   }
   return { new_o1s, removed };
