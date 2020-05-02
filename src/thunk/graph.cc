@@ -17,6 +17,15 @@ using namespace std;
 using namespace gg;
 using namespace gg::thunk;
 
+std::ostream& operator<<( std::ostream& o, const ComputationKind& k ) {
+  switch ( k ) {
+    case ComputationKind::LINK: return o << "LINK";
+    case ComputationKind::THUNK: return o << "THUNK";
+    case ComputationKind::VALUE: return o << "VALUE";
+    default: throw runtime_error("Unknown ComputationKind");
+  }
+}
+
 Computation::Computation( Thunk && thunk )
   : thunk( move( thunk ) ) {}
 
@@ -39,29 +48,28 @@ bool Computation::is_reducible_from_hash( const string & hash ) const
 ExecutionGraph::ExecutionGraph()
   : verbose( getenv( "GG_VERBOSE" ) != nullptr ) {}
 
-std::pair<ComputationId, std::unordered_set<Hash>>
+HashSet
 ExecutionGraph::add_thunk( const Hash & full_hash )
 {
   if ( verbose ) cerr << "Adding thunk: " << full_hash << endl;
-  const auto retval = add_thunk_common( full_hash );
-  if ( verbose ) {
-      for ( const auto & o1 : retval.second ) {
-        cerr << "  exec " << ids_.at( o1 ) << " as " << o1 << endl;
-      }
+  const auto retval = _add_thunk_common( full_hash );
+  for ( const auto & o1 : retval.second ) {
+    if ( verbose ) cerr << "  exec " << ids_.at( o1 ) << " as " << o1 << endl;
+    ThunkWriter::write( computations_.at( ids_.at( o1 ) ).thunk );
   }
-  return retval;
+  return retval.second;
 }
 
-std::pair<ComputationId, std::unordered_set<Hash>>
-ExecutionGraph::add_inner_thunk( const Hash & full_hash )
+std::pair<ComputationId, HashSet>
+ExecutionGraph::_add_inner_thunk( const Hash & full_hash )
 {
   if ( verbose ) cerr << "  Adding inner thunk: " << full_hash << endl;
-  const auto retval = add_thunk_common( full_hash );
+  const auto retval = _add_thunk_common( full_hash );
   return retval;
 }
 
-std::pair<ComputationId, std::unordered_set<Hash>>
-ExecutionGraph::add_thunk_common( const Hash & full_hash )
+std::pair<ComputationId, HashSet>
+ExecutionGraph::_add_thunk_common( const Hash & full_hash )
 {
   // Strip output name
   const string hash = gg::hash::base( full_hash );
@@ -85,8 +93,9 @@ ExecutionGraph::add_thunk_common( const Hash & full_hash )
 
   // Create node in the graph
   ComputationId id = next_id_++;
-  if ( verbose ) cerr << "  id: " << id << endl;
   unordered_set<Hash> new_o1s = _emplace_thunk( id, move( thunk ) );
+
+  if ( verbose ) cerr << "  new id: " << id << endl;
   return { id, new_o1s };
 }
 
@@ -94,6 +103,9 @@ std::unordered_set<Hash>
 ExecutionGraph::_emplace_thunk( ComputationId id,
                                 gg::thunk::Thunk && thunk )
 {
+  // Executable hashes. Will be returned.
+  unordered_set<Hash> new_o1s;
+
   // First, put the computation into the graph
   if ( computations_.count( id ) ) {
     Computation & computation = computations_.at( id );
@@ -102,12 +114,11 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
     computations_.emplace( id, Computation { move( thunk ) } );
   }
 
-  // Now, check the hash of the computation
+  // Check the hash.
   Computation & computation = computations_.at( id );
   const Hash hash = computation.thunk.hash();
-  unordered_set<Hash> new_o1s;
   if ( ids_.count( hash ) ) {
-    // If we already have a node with this hash, link our node to it.
+    // If we already have a computation with this hash, link our node to it.
     const ComputationId target_id = ids_.at( hash );
     computation.is_link_ = true;
     const auto removed = _cut_dependencies( id );
@@ -117,13 +128,13 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
     // If not, add dependencies
     for ( const Thunk::DataItem & item : computation.thunk.thunks() ) {
       const string child_hash = gg::hash::base( item.first );
-      const auto child_id_and_o1s = add_inner_thunk( child_hash );
+      const auto child_id_and_o1s = _add_inner_thunk( child_hash );
       _create_dependency( id, child_hash, child_id_and_o1s.first );
       new_o1s.insert( child_id_and_o1s.second.begin(), child_id_and_o1s.second.end() );
     }
     for ( const Thunk::DataItem & item : computation.thunk.futures() ) {
       const string child_hash = gg::hash::base( item.first );
-      const auto child_id_and_o1s = add_thunk( child_hash );
+      const auto child_id_and_o1s = _add_inner_thunk( child_hash );
       _create_dependency( id, child_hash, child_id_and_o1s.first );
       new_o1s.insert( child_id_and_o1s.second.begin(), child_id_and_o1s.second.end() );
     }
@@ -132,7 +143,7 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
     }
   }
 
-  // Update our thunk (adds its new hash to the hash index)
+  // Update our thunk.
   _update( id );
 
   if ( verbose ) {
@@ -145,8 +156,8 @@ ExecutionGraph::_emplace_thunk( ComputationId id,
 
   if ( computation.thunk.can_be_executed() ) {
     new_o1s.insert( computation.thunk.hash() );
-    ThunkWriter::write( computation.thunk );
   }
+
   return new_o1s;
 }
 
@@ -234,15 +245,6 @@ IdSet ExecutionGraph::_update( const ComputationId id )
     }
   }
 
-  if ( verbose ) {
-    cerr << "      _update( " << id << ") end" << endl;
-    cerr << "      is thunk " << computation.is_thunk() << endl;
-    cerr << "      is link " << computation.is_link() << endl;
-    cerr << "      is value " << computation.is_value() << endl;
-    cerr << "      hash " << computation.thunk.hash() << endl;
-    cerr << "      is executable " << computation.thunk.can_be_executed() << endl;
-    ThunkWriter::write( computation.thunk );
-  }
   if ( computation.is_thunk() and computation.thunk.can_be_executed() ) {
     newly_executable.insert( id );
   }
@@ -339,7 +341,7 @@ void ExecutionGraph::_create_dependency( const ComputationId from,
 
 std::vector<Hash>
 ExecutionGraph::_erase_dependency( const ComputationId from,
-                                        const ComputationId on ) {
+                                   const ComputationId on ) {
   Computation & parent = computations_.at( from );
   Computation & child = computations_.at( on );
   parent.deps.erase( on );
@@ -428,9 +430,10 @@ ExecutionGraph::submit_reduction( const Hash & from,
         "ExecutionGraph::submit_reduction: cannot reduce value: " + from );
   }
 
-  // If this hash is unknown, ignore it
+  // If this hash is unknown, error
   if ( ids_.count( from ) == 0 ) {
-    return {};
+    throw runtime_error(
+        string("ExecutionGraph::submit_reduction: cannot reduce unknown hash: ") + from );
   }
 
   ComputationId id = ids_.at( from );
@@ -452,6 +455,7 @@ ExecutionGraph::submit_reduction( const Hash & from,
   // Finally, accept the reduction
   _mark_out_of_date( id );
   const auto removed = _cut_dependencies( id );
+  assert( computation.deps.empty() );
 
   string & new_hash = outputs.front().hash;
   const gg::ObjectType new_type = gg::hash::type( new_hash );
@@ -465,25 +469,23 @@ ExecutionGraph::submit_reduction( const Hash & from,
   } else {
     // A value -- return reverse dependencies
     computation.outputs = move( outputs );
-    _cut_dependencies( id );
-    assert( computation.deps.empty() );
     n_values++;
+
     unordered_set<ComputationId> newly_updated = _update_parent_thunks( id );
     for ( const ComputationId parent_id : newly_updated ) {
       Computation & parent = computations_.at( parent_id );
-      if ( verbose ) cerr << "  newly_updated " << parent_id << " " << parent.thunk.can_be_executed() << endl;
       if ( parent.thunk.can_be_executed() ) {
         // Make sure to record the hash and write the thunk before submitting
-        if ( verbose and ids_.count( parent.thunk.hash() ) and ids_.at( parent.thunk.hash() ) != parent_id ) cerr << "  hash already assigned to id " << ids_.at( parent.thunk.hash() )  << endl;
-        ThunkWriter::write( parent.thunk );
         new_o1s.insert( parent.thunk.hash() );
       }
     }
   }
-  if ( verbose ) {
-    for ( const auto & o1 : new_o1s ) {
+
+  for ( const auto & o1 : new_o1s ) {
+    if ( verbose ) {
       cerr << "  exec " << ids_.at( o1 ) << " as " << o1 << endl;
     }
+    ThunkWriter::write( computations_.at( ids_.at( o1 ) ).thunk );
   }
   return { new_o1s, removed };
 }

@@ -98,7 +98,7 @@ Reductor::Reductor( const vector<string> & target_hashes,
     [this] ()
     {
       for ( const string & hash : target_hashes_ ) {
-        unordered_set<string> thunk_o1_deps = dep_graph_.add_thunk( hash ).second;
+        unordered_set<string> thunk_o1_deps = dep_graph_.add_thunk( hash );
         job_queue_.insert( job_queue_.end(), thunk_o1_deps.begin(), thunk_o1_deps.end() );
         enqueued_jobs_.insert( thunk_o1_deps.begin(), thunk_o1_deps.end() );
       }

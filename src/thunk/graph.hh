@@ -4,24 +4,47 @@
 #ifndef GRAPH_HH
 #define GRAPH_HH
 
-#include <string>
+#include <iosfwd>
 #include <memory>
 #include <map>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <mutex>
 
 #include "thunk/thunk.hh"
 #include "util/optional.hh"
 
 typedef std::string Hash;
 
+// # Introductio
+//
+// This data structure manages the (concurrent) reduction of LISP-like terms.
+//
+// At its core it is a DAG of `Computation`s, which are keyed by unique
+// `ComputationId`s.
+//
+// A computation can be:
+//   * A `Value`: a primitive term, that need not be further reduced
+//   * A `Thunk`: a non-primitive term
+//   * A `LINK`: a copy of some other `Thunk`.
+//      * This can be viewed as an "indentity" thunk.
+//
+// It helps to start by ignoring thunks.
+//
+// Critical operations:
+//
+//   * `add_thunk(Thunk) -> set<Hash>`: thi
+//
+//
+
 enum class ComputationKind {
   VALUE,    // This node has been evalutated
   THUNK,    // This node is unevaluated
   LINK      // This node is unevaluated and is a copy of another
 };
+
+std::ostream& operator<<(std::ostream&, const ComputationKind&);
 
 // A computation denotes a node in the graph which is in the process of being reduced.
 // If (+ 3 4) was reduced to 7, then both would have the same ComputationId,
@@ -129,11 +152,11 @@ private:
   // links.
   ComputationId _follow_links( const ComputationId id ) const;
 
-  std::pair<ComputationId, HashSet> add_inner_thunk( const Hash & hash );
+  std::pair<ComputationId, HashSet> _add_inner_thunk( const Hash & hash );
   // Adds a computation for this thunk to the graph. A No-op if present.
   // Returns the id of the added thunk, and the hash of any new order-one
   // dependencies.
-  std::pair<ComputationId, HashSet> add_thunk_common( const Hash & hash );
+  std::pair<ComputationId, HashSet> _add_thunk_common( const Hash & hash );
 
 public:
   ExecutionGraph();
@@ -141,7 +164,8 @@ public:
   ExecutionGraph & operator=(const ExecutionGraph& other) = delete;
 
   // Adds a computation for this thunk to the graph.
-  std::pair<ComputationId, HashSet> add_thunk( const Hash & hash );
+  // Returns 
+  HashSet add_thunk( const Hash & hash );
 
   // Given a `hash`, determines the value of that hash, if it is known.
   Optional<Hash> query_value( const Hash & hash ) const;
