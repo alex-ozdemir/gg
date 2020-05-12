@@ -5,6 +5,7 @@
 #include "graph.hh"
 
 #include <algorithm>
+#include <iostream>
 #include <queue>
 #include <stdexcept>
 
@@ -309,7 +310,7 @@ ExecutionGraph::_update_parent_thunks( const ComputationId id )
       case ComputationKind::VALUE:
       default:
       {
-        throw runtime_error("Computation " + to_string(id) + " is a value in _update_parent_thunks");
+        std::cerr << ("Computation " + to_string(id) + " is a value in _update_parent_thunks") << std::endl;
         break;
       }
     }
