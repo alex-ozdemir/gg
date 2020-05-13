@@ -15,6 +15,7 @@ GG_LDADD = ../execution/libggexecution.a \
            ../util/libggutil.a
 
 BASE_LDADD = $(GG_LDADD) $(PROTOBUF_LIBS) $(HIREDIS_LIBS)
+BASE_STATIC = -static -s -Wl,--push-state,--whole-archive ../net/libggnet.a -Wl,--pop-state
 
 bin_PROGRAMS = gg gg-trace gg-describe gg-force-and-run gg-force gg-mock \
                gg-execute gg-infer gg-thunksummary gg-s3-upload \
@@ -48,8 +49,8 @@ gg_execute_SOURCES = gg-execute.cc
 gg_execute_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
 
 gg_execute_static_SOURCES = gg-execute.cc
-gg_execute_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS) -ldl -lz
-gg_execute_static_LDFLAGS = -static -s -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
+gg_execute_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
+gg_execute_static_LDFLAGS = $(BASE_STATIC)
 
 gg_force_SOURCES = gg-force.cc
 gg_force_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
@@ -67,8 +68,8 @@ gg_hash_SOURCES = gg-hash.cc
 gg_hash_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS)
 
 gg_hash_static_SOURCES = gg-hash.cc
-gg_hash_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS) -ldl -lz
-gg_hash_static_LDFLAGS = -static -s -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
+gg_hash_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
+gg_hash_static_LDFLAGS = $(BASE_STATIC)
 
 gg_collect_SOURCES = gg-collect.cc
 gg_collect_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS)
@@ -77,8 +78,8 @@ gg_create_thunk_SOURCES = gg-create-thunk.cc
 gg_create_thunk_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS)
 
 gg_create_thunk_static_SOURCES = gg-create-thunk.cc
-gg_create_thunk_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS) -ldl -lz
-gg_create_thunk_static_LDFLAGS = -static -s -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
+gg_create_thunk_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
+gg_create_thunk_static_LDFLAGS = $(BASE_STATIC)
 
 gg_s3_upload_SOURCES = gg-s3-upload.cc
 gg_s3_upload_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
@@ -99,8 +100,8 @@ gg_meow_worker_SOURCES = gg-meow-worker.cc
 gg_meow_worker_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
 
 gg_meow_worker_static_SOURCES = gg-meow-worker.cc
-gg_meow_worker_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS) -ldl -lz
-gg_meow_worker_static_LDFLAGS = -static -s -Wl,--whole-archive -lpthread -Wl,--no-whole-archive
+gg_meow_worker_static_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)
+gg_meow_worker_static_LDFLAGS = $(BASE_STATIC)
 
 gg_object_server_SOURCES = gg-object-server.cc
 gg_object_server_LDADD = $(BASE_LDADD) $(CRYPTO_LIBS) $(SSL_LIBS)

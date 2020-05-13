@@ -14,7 +14,7 @@ AC_PROG_CXX
 AC_PROG_RANLIB
 
 # Add picky CXXFLAGS
-CXX14_FLAGS="-std=c++14 -lrt -pthread"
+CXX14_FLAGS="-std=c++14"
 PICKY_CXXFLAGS="-pedantic -Wall -Wextra -Weffc++ -Werror"
 AC_SUBST([CXX14_FLAGS])
 AC_SUBST([PICKY_CXXFLAGS])
@@ -31,10 +31,10 @@ AM_CONDITIONAL([BUILD_STATIC_BINS], [test x$sanitize = xfalse])
 AC_SUBST(EXTRA_CXXFLAGS)
 
 # Checks for libraries.
-PKG_CHECK_MODULES([CRYPTO],[libcrypto++])
-PKG_CHECK_MODULES([SSL],[libssl libcrypto])
-PKG_CHECK_MODULES([PROTOBUF], [protobuf])
-PKG_CHECK_MODULES([HIREDIS], [hiredis])
+PKG_CHECK_MODULES_STATIC([CRYPTO],[libcrypto++])
+PKG_CHECK_MODULES_STATIC([SSL],[libssl libcrypto])
+PKG_CHECK_MODULES_STATIC([PROTOBUF], [protobuf])
+PKG_CHECK_MODULES_STATIC([HIREDIS], [hiredis])
 
 AX_BOOST_BASE([1.54.0], [], [AC_MSG_ERROR([Missing boost (may need to install libboost-dev)])])
 
