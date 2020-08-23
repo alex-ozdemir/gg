@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-from os.path import abspath
 import sys
 from zipfile import ZipFile
 import tempfile
@@ -69,7 +68,7 @@ def create_function_package(label, output, function_execs, gg_execute_static, gg
     for exe in function_execs:
         PACKAGE_FILES["executables/{}".format(exe[0])] = exe[1]
 
-    shutil.copy(abspath(BASE_FILE[label]), output)
+    shutil.copy(BASE_FILE[label], output)
 
     with ZipFile(output, 'a') as funczip:
         for fn, fp in PACKAGE_FILES.items():

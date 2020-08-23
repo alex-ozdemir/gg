@@ -4,8 +4,6 @@
 
 #include <sstream>
 #include <iomanip>
-#include <fstream>
-#include <sstream>
 #include <sys/types.h>
 #include <sys/fcntl.h>
 #include <fcntl.h>
@@ -286,7 +284,6 @@ namespace gg {
     string compute( const string & input, const ObjectType type )
     {
       string ret { move( digest::sha256( input ) ) };
-      cout << "Raw output: " << ret << endl;
       ostringstream output_sstr;
 
       replace( ret.begin(), ret.end(), '-', '.' );
@@ -297,15 +294,11 @@ namespace gg {
 
     string file_force( const roost::path & path, Optional<ObjectType> type )
     {
-//      FileDescriptor file { CheckSystemCall( "open (" + path.string() + ")",
-//                                             open( path.string().c_str(), O_RDONLY ) ) };
+      FileDescriptor file { CheckSystemCall( "open (" + path.string() + ")",
+                                             open( path.string().c_str(), O_RDONLY ) ) };
 
-      ifstream i(path.string());
-      ostringstream scontents;
-      scontents << i.rdbuf();
-
-      string contents = scontents.str();
-      //while ( not file.eof() ) { contents += file.read(); }
+      string contents;
+      while ( not file.eof() ) { contents += file.read(); }
 
       if ( not type.initialized() ) {
         type = ( contents.size() >= thunk::MAGIC_NUMBER.size() and
@@ -313,7 +306,6 @@ namespace gg {
                                    gg::thunk::MAGIC_NUMBER ) == 0 )
                ? ObjectType::Thunk : ObjectType::Value;
       }
-      cout << "Going to hash: " << contents.size() << endl;
 
       return gg::hash::compute( contents, *type );
     }

@@ -4,7 +4,6 @@
 
 #include <cryptopp/base64.h>
 #include <cryptopp/sha.h>
-#include <iostream>
 
 using namespace CryptoPP;
 using namespace std;
@@ -12,16 +11,14 @@ using namespace std;
 string digest::sha256( const string & input )
 {
   SHA256 hash_function;
-  string out;
-
+  string ret;
 
   /* Each stage of the Crypto++ pipeline will delete the pointer it owns
      (https://www.cryptopp.com/wiki/Pipelining) */
-  StringSource( input, true, new HashFilter( hash_function, new Base64URLEncoder( new StringSink ( out ), false)));
 
-//  StringSource s( input, true,
-//                  new HashFilter( hash_function,
-//                                  new Base64URLEncoder( new StringSink( ret ), false ) ) );
+  StringSource s( input, true,
+                  new HashFilter( hash_function,
+                                  new Base64URLEncoder( new StringSink( ret ), false ) ) );
 
-  return out;
+  return ret;
 }

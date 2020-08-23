@@ -12,7 +12,6 @@ endmacro()
 
 add_gg_exec(gg-init util)
 add_gg_exec(gg-hash thunk)
-add_gg_exec(gg-bad-hash util)
 add_gg_exec(gg-collect thunk)
 add_gg_exec(gg-create-thunk thunk)
 add_gg_exec(gg-describe thunk)
