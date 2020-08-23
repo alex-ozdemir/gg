@@ -25,8 +25,8 @@ class ExampleTest(TestCase):
                 args = res.group(1).strip().split()
 
                 res = re.search("#.*RESULT: (\\w*)", s)
-                assert res is not None  # for mypy
                 self.assertIsNotNone(res)
+                assert res is not None  # for mypy
                 result = res.group(1)
 
                 with tempfile.TemporaryDirectory() as d:
