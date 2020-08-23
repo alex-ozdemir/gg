@@ -1,0 +1,19 @@
+# Find CRYPTOPP
+# CRYPTOPP_FOUND - system has CRYPTOPP lib
+# CRYPTOPP_INCLUDE_DIR - the CRYPTOPP include directory
+# CRYPTOPP_LIBRARIES - Libraries needed to use CRYPTOPP
+
+set(CRYPTOPP_DIR "${PROJECT_SOURCE_DIR}/third_party/install/")
+find_path(CRYPTOPP_INCLUDE_DIR NO_DEFAULT_PATH PATHS ${CRYPTOPP_DIR}/include NAMES cryptopp REQUIRED)
+find_library(CRYPTOPP_LIBRARIES NO_DEFAULT_PATH PATHS ${CRYPTOPP_DIR}/lib NO_DEFAULT_PATH NAMES cryptopp REQUIRED)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(CRYPTOPP
+  DEFAULT_MSG
+  CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARIES)
+
+mark_as_advanced(CRYPTOPP_INCLUDE_DIR CRYPTOPP_LIBRARIES)
+if(CRYPTOPP_FOUND)
+  message(STATUS "Found CRYPTOPP include dir: ${CRYPTOPP_INCLUDE_DIR}")
+  message(STATUS "Found CRYPTOPP libs: ${CRYPTOPP_LIBRARIES}")
+endif()

@@ -2,9 +2,7 @@
 
 #include "base64.hh"
 
-#include <crypto++/sha.h>
-#include <crypto++/hex.h>
-#include <crypto++/base64.h>
+#include <cryptopp/base64.h>
 
 using namespace CryptoPP;
 using namespace std;

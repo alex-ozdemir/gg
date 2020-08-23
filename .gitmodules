@@ -7,3 +7,15 @@
 [submodule "third_party/cpptoml"]
 	path = third_party/cpptoml
 	url = https://github.com/skystrife/cpptoml
+[submodule "third_party/cryptopp"]
+	path = third_party/cryptopp
+	url = https://github.com/weidai11/cryptopp.git
+	branch = 9dcc26c58213abb8351fbb1b2a7a1d2c667366e4
+[submodule "third_party/openssl"]
+	path = third_party/openssl
+	url = https://github.com/openssl/openssl.git
+	branch = e2e09d9fba1187f8d6aafaa34d4172f56f1ffb72
+[submodule "third_party/hiredis"]
+	path = third_party/hiredis
+	url = https://github.com/redis/hiredis.git
+	branch = d5b4c69b7113213c1da3a0ccbfd1ee1b40443c7a

@@ -34,7 +34,6 @@ Makefile.in
 
 .idea
 .env
-CMakeLists.txt
 cmake-build-debug
 .DS_Store
 ._.DS_Store
@@ -42,3 +41,5 @@ cmake-build-debug
 __pycache__/
 compile_commands.json
 **/.mypy_cache
+build
+.ccls-cache

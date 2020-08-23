@@ -2,9 +2,8 @@
 
 #include "digest.hh"
 
-#include <crypto++/sha.h>
-#include <crypto++/hex.h>
-#include <crypto++/base64.h>
+#include <cryptopp/base64.h>
+#include <cryptopp/sha.h>
 
 using namespace CryptoPP;
 using namespace std;
