@@ -46,4 +46,5 @@ add_library(util exception.hh
     inotify.cc
     ipc_socket.hh
     ipc_socket.cc)
-target_link_libraries(util PRIVATE ${CRYPTOPP_LIBRARIES})
+target_link_libraries(util PUBLIC ${CRYPTOPP_LIBRARIES})
+target_include_directories(util PUBLIC ${CRYPTOPP_INCLUDE_DIR})
