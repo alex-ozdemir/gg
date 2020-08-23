@@ -22,7 +22,7 @@ include(FindOpenSSL)
 
 include(FindCRYPTOPP)
 
-add_subdirectory(third_party/hiredis)
+add_subdirectory(third_party/hiredis EXCLUDE_FROM_ALL)
 
 include_directories(src)
 include_directories(${CMAKE_BINARY_DIR}/src)
