@@ -178,7 +178,7 @@ int main( int argc, char * argv[] )
                   setenv( "GG_STORAGE_URI", exec_request.storage_backend().c_str(), true );
 
                   vector<string> command {
-                    "gg-execute-static",
+                    "gg-execute",
                     "--get-dependencies",
                     "--put-output",
                     // "--cleanup"

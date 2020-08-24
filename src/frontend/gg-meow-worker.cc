@@ -147,7 +147,7 @@ int main( int argc, char * argv[] )
             },
             [hash=execution_request.hash()]()
             {
-              vector<string> command { "gg-execute-static",
+              vector<string> command { "gg-execute",
                                        "--get-dependencies",
                                        "--put-output",
                                        "--cleanup",

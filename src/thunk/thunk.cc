@@ -23,6 +23,7 @@
 using namespace std;
 using namespace gg;
 using namespace gg::thunk;
+using namespace CryptoPP;
 
 string thunk::data_placeholder( const string & hash )
 {
@@ -267,7 +268,9 @@ protobuf::RequestItem Thunk::execution_request( const Thunk & thunk )
 {
   protobuf::RequestItem request_item;
 
-  string base64_thunk = base64::encode( ThunkWriter::serialize( thunk ) );
+  string base64_thunk;
+  StringSource s( ThunkWriter::serialize( thunk ), true,
+                  new Base64Encoder( new StringSink( base64_thunk ), false ) );
 
   request_item.set_data( base64_thunk );
   request_item.set_hash( thunk.hash() );

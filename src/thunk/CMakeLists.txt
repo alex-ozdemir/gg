@@ -16,5 +16,5 @@ add_library(thunk
     graph.hh
     factory.cc
     factory.hh)
-target_link_libraries(thunk PRIVATE util sandbox protobufs)
-target_include_directories(thunk PRIVATE protobufs_hdrs)
+target_link_libraries(thunk PRIVATE util sandbox protobufs ${CRYPTOPP_LIBRARIES})
+target_include_directories(thunk PRIVATE protobufs_hdrs ${CRYPTOPP_INCLUDE_DIR})

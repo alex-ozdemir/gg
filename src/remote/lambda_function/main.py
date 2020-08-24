@@ -74,7 +74,7 @@ def handler(event, context):
                 raise
 
     # Execute the thunk, and upload the result
-    command = ["gg-execute-static",
+    command = ["gg-execute",
                "--get-dependencies",
                "--put-output",
                "--cleanup"]

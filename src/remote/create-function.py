@@ -56,7 +56,7 @@ def gghash(filename, block_size=65536):
 
 def create_function_package(label, output, function_execs, gg_execute_static, gg_meow_worker):
     PACKAGE_FILES = {
-        "gg-execute-static": gg_execute_static,
+        "gg-execute": gg_execute_static,
         "main.py": "%s_function/main.py" % label,
         "ggpaths.py": "common/ggpaths.py",
         "common.py": "common/common.py"
@@ -109,8 +109,8 @@ def main():
     parser.add_argument('--role', dest='role', action='store',
                         default=os.environ.get('GG_LAMBDA_ROLE'))
     parser.add_argument('--region', dest='region', default=os.environ.get('AWS_REGION'), action='store')
-    parser.add_argument('--gg-execute-static', dest='gg_execute_static',
-                        default=shutil.which("gg-execute-static"))
+    parser.add_argument('--gg-execute', dest='gg_execute_static',
+                        default=shutil.which("gg-execute"))
     parser.add_argument('--gg-meow-worker', dest='gg_meow_worker',
                         default=shutil.which("gg-meow-worker"))
     parser.add_argument('--toolchain-path', dest='toolchain_path', required=True)
@@ -118,7 +118,7 @@ def main():
     args = parser.parse_args()
 
     if not args.gg_execute_static:
-        raise Exception("Cannot find gg-execute-static")
+        raise Exception("Cannot find gg-execute")
 
     if not args.role:
         raise Exception("Please provide function role (or set GG_LAMBDA_ROLE).")

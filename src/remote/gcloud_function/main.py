@@ -56,7 +56,7 @@ def handler(request):
     os.system("rm -rf /tmp/thunk-execute.*")
 
     # Execute the thunk, and upload the result
-    command = ["gg-execute-static",
+    command = ["gg-execute",
                "--get-dependencies",
                "--put-output",
                "--cleanup"]
