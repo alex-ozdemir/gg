@@ -809,7 +809,6 @@ class GGCoordinator(GG):
         super().__init__(lib, script, iw, args)
 
     def _collect(self, path: str) -> Hash:
-        print(f"Collecting: {path}")
         return sub.check_output([_which("gg-collect"), path]).decode().strip()
 
     def init(self) -> None:
