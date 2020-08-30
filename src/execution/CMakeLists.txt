@@ -21,4 +21,4 @@ engine_meow.hh
 engine_meow.cc
 reductor.hh
 reductor.cc)
-target_link_libraries(execution PRIVATE thunk tui net storage util)
+target_link_libraries(execution PUBLIC thunk tui net storage util)
