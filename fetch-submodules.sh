@@ -7,3 +7,4 @@ git submodule update --init third_party/cpptoml
 ./contrib/build-cryptopp.sh
 git submodule update --init third_party/hiredis
 ./contrib/patch-hiredis.sh
+./contrib/get-protobuf.sh
