@@ -106,6 +106,8 @@ private:
 
   ComputationId next_id_ {0};
 
+  bool log_renames_;
+
   // Place the thunk at the indicated location, and pull in dependencies
   // Returns any new order one dependencies.
   HashSet _emplace_thunk( ComputationId id,
@@ -159,7 +161,9 @@ private:
   std::pair<ComputationId, HashSet> _add_thunk_common( const Hash & hash );
 
 public:
-  ExecutionGraph();
+  // If `log_renames` is set, then the graph will record changes in thunk
+  // hashes.
+  ExecutionGraph(const bool log_renames);
   ExecutionGraph(const ExecutionGraph& other) = delete;
   ExecutionGraph & operator=(const ExecutionGraph& other) = delete;
 

@@ -33,7 +33,7 @@ private:
   bool status_bar_;
   bool record_exec_metadata_;
 
-  ExecutionGraph dep_graph_ {};
+  ExecutionGraph dep_graph_;
 
   std::deque<std::string> job_queue_ {};
   std::unordered_set<std::string> enqueued_jobs_ {};
@@ -66,7 +66,8 @@ public:
             const std::chrono::milliseconds default_timeout = std::chrono::milliseconds { 0 },
             const size_t timeout_multiplier = 1,
             const bool status_bar = false,
-            const bool record_exec_metadata = true);
+            const bool record_exec_metadata = false,
+            const bool log_renames = false);
 
   std::vector<std::string> reduce();
   void upload_dependencies() const;

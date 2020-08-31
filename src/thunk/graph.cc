@@ -46,8 +46,8 @@ bool Computation::is_reducible_from_hash( const string & hash ) const
 }
 
 
-ExecutionGraph::ExecutionGraph()
-  : verbose( getenv( "GG_VERBOSE" ) != nullptr ) {}
+ExecutionGraph::ExecutionGraph(const bool log_renames)
+  : verbose( getenv( "GG_VERBOSE" ) != nullptr ), log_renames_(log_renames) {}
 
 HashSet
 ExecutionGraph::add_thunk( const Hash & full_hash )
@@ -200,9 +200,12 @@ IdSet ExecutionGraph::_update( const ComputationId id )
           _erase_dependency( id, child_id );
         } else {
           string new_hash = child.thunk.hash();
-          if (old_hash != new_hash) {
+          if ( old_hash != new_hash ) {
             computation.thunk.update_data( old_hash, { { new_hash, "" } } );
             computation.dep_hashes[ child_id ] = new_hash;
+            if ( log_renames_ ) {
+              roost::atomic_create( new_hash, paths::rename( old_hash ) );
+            }
           }
         }
       }

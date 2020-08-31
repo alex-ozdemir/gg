@@ -137,6 +137,12 @@ namespace gg {
       return metadata_path;
     }
 
+    roost::path rename()
+    {
+      const static roost::path rename_path = get_inner_directory( "renames" );
+      return rename_path;
+    }
+
     roost::path remotes()
     {
       const static roost::path index_path = get_gg_cache_inner_dir( "remotes" );
@@ -180,6 +186,11 @@ namespace gg {
     roost::path metadata( const string & hash )
     {
       return metadata() / hash;
+    }
+
+    roost::path rename( const string & hash )
+    {
+      return rename() / hash;
     }
 
     roost::path remote( const string & hash )
