@@ -196,16 +196,29 @@ IdSet ExecutionGraph::_update( const ComputationId id )
         Computation & child = computations_.at( child_id );
         string old_hash = computation.dep_hashes.at( child_id );
         if ( child.is_value() ) {
+          string old_p_hash;
+          if ( log_renames_ ) {
+            old_p_hash = computation.thunk.hash();
+          }
           computation.thunk.update_data( old_hash, child.outputs );
+          if ( log_renames_ ) {
+            const string& new_p_hash = computation.thunk.hash();
+            roost::atomic_create( new_p_hash, paths::rename( old_p_hash ) );
+          }
           _erase_dependency( id, child_id );
         } else {
           string new_hash = child.thunk.hash();
           if ( old_hash != new_hash ) {
-            computation.thunk.update_data( old_hash, { { new_hash, "" } } );
-            computation.dep_hashes[ child_id ] = new_hash;
+            string old_p_hash;
             if ( log_renames_ ) {
-              roost::atomic_create( new_hash, paths::rename( old_hash ) );
+              old_p_hash = computation.thunk.hash();
             }
+            computation.thunk.update_data( old_hash, { { new_hash, "" } } );
+            if ( log_renames_ ) {
+              const string& new_p_hash = computation.thunk.hash();
+              roost::atomic_create( new_p_hash, paths::rename( old_p_hash ) );
+            }
+            computation.dep_hashes[ child_id ] = new_hash;
           }
         }
       }
