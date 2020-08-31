@@ -84,10 +84,12 @@ Reductor::Reductor( const vector<string> & target_hashes,
                     std::unique_ptr<StorageBackend> && storage_backend,
                     const std::chrono::milliseconds default_timeout,
                     const size_t timeout_multiplier,
-                    const bool status_bar )
+                    const bool status_bar,
+                    const bool record_exec_metadata)
   : target_hashes_( target_hashes ),
     remaining_targets_( target_hashes_.begin(), target_hashes_.end() ),
-    status_bar_( status_bar ), default_timeout_( default_timeout ),
+    status_bar_( status_bar ), record_exec_metadata_(record_exec_metadata),
+    default_timeout_( default_timeout ),
     timeout_multiplier_( timeout_multiplier ),
     exec_engines_( move( execution_engines ) ),
     fallback_engines_( move( fallback_engines ) ),
@@ -179,6 +181,15 @@ void Reductor::finalize_execution( const string & old_hash,
                                    vector<ThunkOutput> && outputs,
                                    const float cost )
 {
+  if ( record_exec_metadata_ )
+  {
+    auto end_time = Clock::now();
+    const JobInfo& info = running_jobs_.at( old_hash );
+    std::chrono::duration<double> secs = end_time - info.start;
+    ostringstream o;
+    o << "Execution time: " << secs.count() << "\n";
+    roost::atomic_create( o.str(), paths::metadata( old_hash ) );
+  }
   running_jobs_.erase( old_hash );
   const string main_output_hash = outputs.at( 0 ).hash;
 

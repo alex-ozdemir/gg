@@ -173,6 +173,7 @@ int main( int argc, char * argv[] )
                   ? stoi( safe_getenv( FORCE_TIMEOUT ) ) : 0;
     size_t timeout_multiplier = 1;
     bool status_bar = !( getenv( FORCE_NO_STATUS ) != nullptr );
+    bool log_metadata = false;
     bool no_download = false;
 
     size_t total_max_jobs = 0;
@@ -182,10 +183,11 @@ int main( int argc, char * argv[] )
 
     struct option long_options[] = {
       { "no-status",          no_argument,       nullptr, 's' },
+      { "log-metadata",       no_argument,       nullptr, 'M' },
       { "sandboxed",          no_argument,       nullptr, 'S' },
       { "jobs",               required_argument, nullptr, 'j' },
       { "timeout",            required_argument, nullptr, 'T' },
-      { "timeout-multiplier", required_argument, nullptr, 'T' },
+      { "timeout-multiplier", required_argument, nullptr, 'm' },
       { "engine",             required_argument, nullptr, 'e' },
       { "fallback-engine",    required_argument, nullptr, 'f' },
       { "no-download",        no_argument,       nullptr, 'd' },
@@ -194,7 +196,7 @@ int main( int argc, char * argv[] )
     };
 
     while ( true ) {
-      const int opt = getopt_long( argc, argv, "sSj:T:e:d", long_options, NULL );
+      const int opt = getopt_long( argc, argv, "sSj:T:e:dmM", long_options, NULL );
 
       if ( opt == -1 ) {
         break;
@@ -207,6 +209,10 @@ int main( int argc, char * argv[] )
 
       case 'S':
         setenv( "GG_SANDBOXED", "1", true );
+        break;
+
+      case 'M':
+        log_metadata = true;
         break;
 
       case 'j':
@@ -315,7 +321,7 @@ int main( int argc, char * argv[] )
                         move( fallback_engines ),
                         move( storage_backend ),
                         std::chrono::milliseconds { timeout * 1000 },
-                        timeout_multiplier, status_bar };
+                        timeout_multiplier, status_bar, log_metadata };
 
     reductor.upload_dependencies();
     vector<string> reduced_hashes = reductor.reduce();

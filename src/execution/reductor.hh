@@ -31,6 +31,7 @@ private:
   const std::vector<std::string> target_hashes_;
   std::vector<std::string> remaining_targets_;
   bool status_bar_;
+  bool record_exec_metadata_;
 
   ExecutionGraph dep_graph_ {};
 
@@ -64,7 +65,8 @@ public:
             std::unique_ptr<StorageBackend> && storage_backend,
             const std::chrono::milliseconds default_timeout = std::chrono::milliseconds { 0 },
             const size_t timeout_multiplier = 1,
-            const bool status_bar = false );
+            const bool status_bar = false,
+            const bool record_exec_metadata = true);
 
   std::vector<std::string> reduce();
   void upload_dependencies() const;
