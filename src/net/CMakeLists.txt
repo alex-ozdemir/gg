@@ -82,4 +82,3 @@ add_library(netobj OBJECT address.cc
     gcloud.hh
     gcloud.cc)
 
-target_link_libraries(net PUBLIC protobufs util ${OPENSSL_LIBRARIES} hiredis)

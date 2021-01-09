@@ -29,4 +29,5 @@ add_subdirectory(third_party/hiredis EXCLUDE_FROM_ALL)
 
 include_directories(src)
 include_directories(${CMAKE_BINARY_DIR}/src)
+link_directories(third_party/install/lib)
 add_subdirectory(src)
