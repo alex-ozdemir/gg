@@ -22,45 +22,16 @@ Building FFmpeg with `gg` on AWS Lambda
 
 ## Build directions
 
+### Normal Build
+
+1. Run `fetch-submodules.sh` to get submodules
+2. Run `fetch-deps.sh` to get and install dependencies.
+3. `mkdir build && cmake .. && make -j $(nproc)`
+4. `sudo make install` to install
+
+### Docker Build
+
 **Notice: If you are Docker adept, follow [this instruction](https://github.com/StanfordSNR/gg/blob/master/docker/README.md).**
-
-To build `gg` you need the following packages:
-
-- `gcc` >= 7.0
-- `protobuf-compiler`, `libprotobuf-dev` >= 3.0
-- `libcrypto++-dev` >= 5.6.3
-- `python3`
-- `libcap-dev`
-- `libncurses5-dev`
-- `libboost-dev`
-- `libssl-dev`
-- `autopoint`
-- `help2man`
-- `texinfo`
-- `automake`
-- `libtool`
-- `pkg-config`
-- `libhiredis-dev`
-- `python3-boto3`
-
-You can install this dependencies in Ubuntu (17.04 or newer) by running:
-
-```
-sudo apt-get install gcc-7 g++-7 protobuf-compiler libprotobuf-dev \
-                     libcrypto++-dev libcap-dev \
-                     libncurses5-dev libboost-dev libssl-dev autopoint help2man \
-                     libhiredis-dev texinfo automake libtool pkg-config python3-boto3
-```
-
-To build `gg`, run the following commands:
-
-```
-./fetch-submodules.sh
-./autogen.sh
-./configure
-make -j$(nproc)
-sudo make install
-```
 
 ## Usage
 
