@@ -149,7 +149,7 @@ string ThunkFactory::generate( const Function & function,
         roost::path target_path = gg::paths::blob( gg::hash::base( datum.hash() ) );
 
         if ( not roost::exists( target_path ) ) {
-          roost::copy_then_rename( source_path, target_path, true, executable ? 0500 : 0400 );
+          roost::copy_then_rename( source_path, target_path, true, executable ? 0777 : 0777 );
         }
       };
 

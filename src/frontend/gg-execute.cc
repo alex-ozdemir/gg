@@ -249,10 +249,10 @@ void fetch_dependencies( unique_ptr<StorageBackend> & storage_backend,
         if ( not roost::exists( target_path )
              or roost::file_size( target_path ) != gg::hash::size( item.first ) ) {
           if ( executables ) {
-            download_items.push_back( { item.first, target_path, 0544 } );
+            download_items.push_back( { item.first, target_path, 0777 } );
           }
           else {
-            download_items.push_back( { item.first, target_path, 0444 } );
+            download_items.push_back( { item.first, target_path, 0777 } );
           }
         }
       };

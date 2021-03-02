@@ -34,7 +34,7 @@ int main( int argc, char * argv[] )
       roost::path dst = gg::paths::blob( hash );
 
       if ( not roost::exists( dst ) ) {
-        const mode_t permission = roost::is_executable( src ) ? 0500 : 0400;
+        const mode_t permission = roost::is_executable( src ) ? 0777 : 0777;
         roost::copy_then_rename( src, dst, true, permission );
       }
 

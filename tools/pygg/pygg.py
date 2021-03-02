@@ -596,7 +596,11 @@ class GG:
                 cmd,
             )
         )
-        result = sub.run(cmd_args, stderr=sub.PIPE, stdout=sub.PIPE, check=True)
+        result = sub.run(cmd_args, stderr=sub.PIPE, stdout=sub.PIPE)
+        if result.returncode != 0:
+            print(f"gg-create-thunk failed with return code: {result.returncode}")
+            print("Output:", result.stdout.decode())
+            print("Error:", result.stderr.decode())
         return result.stderr.decode().strip()
 
     def thunk_fn(
