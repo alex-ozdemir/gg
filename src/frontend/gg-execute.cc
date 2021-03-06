@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <memory>
 #include <sys/fcntl.h>
+#include <sys/statvfs.h>
 #include <getopt.h>
 #include <vector>
 #include <unordered_set>
@@ -34,6 +35,7 @@ using ReductionResult = gg::cache::ReductionResult;
 const bool sandboxed = ( getenv( "GG_SANDBOXED" ) != NULL );
 const string temp_dir_template = "/tmp/thunk-execute";
 const string temp_file_template = "/tmp/thunk-file";
+const size_t extra_space = 209715200; // 200 MiB
 
 vector<string> execute_thunk( const Thunk & original_thunk )
 {
@@ -234,6 +236,31 @@ void do_cleanup( const Thunk & thunk )
   }
 }
 
+// Remove blobs which are not needed for this thunk.
+void remove_unneeded_blobs(const Thunk& thunk)
+{
+  cerr << "Removing un-needed blobs before executing: " << thunk.hash() << endl;
+  unordered_set<string> needed;
+  needed.insert(thunk.hash());
+  for (const auto& data : thunk.values()) {
+    needed.insert(data.first);
+  }
+  for (const auto& data : thunk.executables()) {
+    needed.insert(data.first);
+  }
+  for (const auto& data : thunk.futures()) {
+    needed.insert(data.first);
+  }
+  vector<string> blobs = roost::list_directory(gg::paths::blobs());
+  roost::Directory blob_dir{gg::paths::blobs().string()};
+  for (const auto& blob : blobs)
+  {
+    if (blob.size() > 3 && !needed.count(blob)) {
+      roost::remove_at(blob_dir, blob);
+    }
+  }
+}
+
 void fetch_dependencies( unique_ptr<StorageBackend> & storage_backend,
                          const Thunk & thunk )
 {
@@ -265,6 +292,17 @@ void fetch_dependencies( unique_ptr<StorageBackend> & storage_backend,
               check_dep );
 
     if ( download_items.size() > 0 ) {
+      size_t bytes_needed = 0;
+      for (const auto& d : download_items) {
+        bytes_needed += gg::hash::size(d.filename.string());
+      }
+      struct statvfs fs_stats;
+      CheckSystemCall("statvfs", statvfs(gg::paths::blobs().string().c_str(), &fs_stats));
+      size_t bytes_available = fs_stats.f_bavail * fs_stats.f_bsize;
+      if (bytes_needed + extra_space < bytes_available) {
+        remove_unneeded_blobs( thunk );
+      }
+
       storage_backend->get( download_items );
     }
   }

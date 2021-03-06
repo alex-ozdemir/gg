@@ -29,21 +29,23 @@ class ExampleTest(TestCase):
                 assert res is not None  # for mypy
                 result = res.group(1)
 
-                with tempfile.TemporaryDirectory() as d:
-                    py = sh.which("python3.7")
-                    force = sh.which("gg-force")
-                    assert py is not None
-                    assert force is not None
-                    sub.run(
-                        cwd=d,
-                        check=True,
-                        args=[py, str(os.path.abspath(p)), "init"] + args,
-                    )
-                    a = [force]
-                    if remote:
-                        a.extend(["--jobs", "1", "--engine", "lambda"])
-                    a.append("out")
-                    sub.run(cwd=d, check=True, args=a)
-                    with open(f"{d}/out") as f:
-                        self.assertEqual(f.read().strip(), result)
+                d = tempfile.mkdtemp(prefix="pygg_test_")
+                print(f"Running in {d}")
+                py = sh.which("python3.7")
+                force = sh.which("gg-force")
+                assert py is not None
+                assert force is not None
+                sub.run(
+                    cwd=d,
+                    check=True,
+                    args=[py, str(os.path.abspath(p)), "init"] + args,
+                )
+                a = [force]
+                if remote:
+                    a.extend(["--jobs", "1", "--engine", "lambda"])
+                a.append("out")
+                sub.run(cwd=d, check=True, args=a)
+                with open(f"{d}/out") as f:
+                    self.assertEqual(f.read().strip(), result)
+                sh.rmtree(d)
 
